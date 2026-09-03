@@ -99,6 +99,7 @@ pointing/emulate_touch_from_mouse=true
 .DS_Store
 *.translation
 build/
+.superpowers/
 ```
 
 - [ ] **Step 2: 테스트 러너 가져오기**
@@ -284,7 +285,7 @@ Expected: `test_tuning: OK`, `전체 통과`
 
 - [ ] **Step 5: 변이 테스트로 검사가 실제로 무는지 확인**
 
-`GRAVITY` 를 잠시 `20.0` 으로 바꾸고 `./run_tests.sh` 를 돌린다. `_test_v_min_falls_short_of_second_row` 가 실패해야 한다 (중력이 세지면 같은 사거리를 내는 `v_min` 도 커지지만, apex 는 계약상 고정이므로 실제로 무는 것은 아래 검사다). 무는 검사가 없으면 `V_MAX` 를 `20.0` 으로 바꿔 `_test_v_max_reaches_top` 이 실패하는지 확인한다. 확인 후 원복한다.
+`V_MAX` 를 잠시 `20.0` 으로 바꾸고 `./run_tests.sh` 를 돌린다. `_test_v_max_reaches_top` 이 실패해야 한다 — 최대 속도로도 상단 벽에 못 닿으면 판 위쪽 두 줄이 영영 안 깨진다. 확인 후 원복한다.
 
 - [ ] **Step 6: 커밋**
 
@@ -466,8 +467,13 @@ func _test_apex_matches_formula() -> void:
 		if vel.y < 0.0:
 			break
 	var expected := Tuning.PADDLE_BAND_MIN_V + Tuning.v_min() * Tuning.v_min() / (2.0 * Tuning.GRAVITY)
-	assert(absf(apex - expected) < 0.05,
-		"적분 도달 높이가 공식과 어긋난다: %f vs %f" % [apex, expected])
+	# 세미암시적 오일러는 도달 높이를 약 v0·dt/2 만큼 낮게 잡는다. 원인을
+	# 아는 오차라 그 두 배까지만 허용한다 — 그냥 큰 수를 넣어 눈감는 것과
+	# 다르다. 위로 넘어가면 적분이 에너지를 만들어내고 있다는 뜻이다.
+	assert(apex <= expected + 0.001,
+		"적분이 공식보다 높이 올라간다 — 에너지가 늘어난다: %f vs %f" % [apex, expected])
+	assert(expected - apex < Tuning.v_min() * dt,
+		"적분 도달 높이가 공식과 너무 어긋난다: %f vs %f" % [apex, expected])
 
 func _test_substeps_keep_step_under_radius() -> void:
 	var dt := 1.0 / 120.0
@@ -931,12 +937,14 @@ func _test_velocity_is_smoothed() -> void:
 
 func _test_swept_rect_covers_previous_position() -> void:
 	var p := PaddleState.new(-3.0)
-	for i in 30:
+	# 10 프레임이면 아직 목표에도 벽에도 못 닿아 계속 움직이는 중이다.
+	# 멈춘 뒤에 재면 스윕 상자가 정지 상자와 같아져 아무것도 안 잰다.
+	for i in 10:
 		p.update(Vector2(3.0, Tuning.PADDLE_BAND_MIN_V), DT)
 	var swept := p.swept_rect()
 	assert(swept.has_point(p.prev_pos), "스윕 상자가 이전 위치를 안 덮는다")
 	assert(swept.has_point(p.pos), "스윕 상자가 현재 위치를 안 덮는다")
-	assert(swept.size.x >= p.rect().size.x, "스윕 상자가 정지 상자보다 좁다")
+	assert(swept.size.x > p.rect().size.x, "움직이는 중인데 스윕 상자가 정지 상자와 같다")
 ```
 
 - [ ] **Step 2: 실패 확인**
@@ -1428,7 +1436,7 @@ func brick_count() -> int:
 
 func build(grid: BrickGrid) -> void:
 	for key in _bricks.keys():
-		(_bricks[key] as Node).queue_free()
+		(_bricks[key] as Node).free()
 	_bricks.clear()
 	refresh_bricks(grid)
 	if _ball == null:
@@ -1445,7 +1453,9 @@ func refresh_bricks(grid: BrickGrid) -> void:
 			var kind := grid.get_cell(col, row)
 			if kind == 0:
 				if _bricks.has(i):
-					(_bricks[i] as Node).queue_free()
+					# 딕셔너리에서 지운 직후라 아무도 다시 참조하지 않는다.
+					# queue_free 는 SceneTree 밖에서 처리 시점이 불확실하다.
+					(_bricks[i] as Node).free()
 					_bricks.erase(i)
 				continue
 			if _bricks.has(i):
@@ -1502,7 +1512,7 @@ func _make_paddle() -> MeshInstance3D:
 Run: `./run_tests.sh`
 Expected: `test_board_view: OK`
 
-`queue_free()` 는 다음 프레임에 처리되므로 `brick_count()` 는 `_bricks` 딕셔너리 크기를 본다. 노드 해제 타이밍과 무관하게 즉시 맞는다.
+`brick_count()` 는 `_bricks` 딕셔너리 크기를 본다. 해제를 `free()` 로 하는 것은 테스트의 BoardView 가 SceneTree 에 붙지 않은 채 만들어지기 때문이다 — `queue_free()` 는 트리 밖에서 처리 시점이 불확실하다.
 
 - [ ] **Step 5: 커밋**
 
