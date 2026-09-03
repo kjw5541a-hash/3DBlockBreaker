@@ -13,7 +13,7 @@ func _test_length_scales_with_speed() -> void:
 	var slow := BallTrail.sample_count(Tuning.v_min())
 	var fast := BallTrail.sample_count(Tuning.V_MAX)
 	assert(fast > slow, "빠른 공의 트레일이 더 길어야 한다: %d vs %d" % [fast, slow])
-	assert(slow >= 2, "가장 느릴 때도 선이 보여야 한다: %d" % slow)
+	assert(slow >= BallTrail.MIN_SAMPLES, "가장 느릴 때도 선이 보여야 한다: %d" % slow)
 
 func _test_color_scales_with_speed() -> void:
 	var slow := BallTrail.color_for(Tuning.v_min())

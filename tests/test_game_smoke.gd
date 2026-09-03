@@ -9,6 +9,7 @@ func _initialize() -> void:
 # 을 한 번 기다려 트리를 실제로 돌린다.
 func _run() -> void:
 	_test_scene_loads_and_runs()
+	_test_life_loss_clears_trail()
 	await _test_screen_point_maps_to_board()
 	print("test_game_smoke: OK")
 	quit()
@@ -28,6 +29,31 @@ func _test_scene_loads_and_runs() -> void:
 		g.step_once(1.0 / 120.0)
 	assert(g.field.lives <= Tuning.LIVES, "목숨이 늘어났다")
 	assert(g.field.ball_pos.y >= 0.0, "공이 데드존에 남아 있다")
+	g.free()
+
+# 목숨을 잃는 순간 트레일이 지워지는지. 안 지우면 죽은 자리의 리본이
+# 남아 다음 발사 때 옛 점과 새 점이 이어진다.
+func _test_life_loss_clears_trail() -> void:
+	var packed := load("res://scenes/game.tscn") as PackedScene
+	var g := packed.instantiate()
+	root.add_child(g)
+	g._ready()
+	# 패들 x 범위 밖에서 떨어뜨린다 — 도중에 튕기면 목숨을 안 잃는다.
+	g.field.attached = false
+	g.field.ball_pos = Vector2(4.0, 2.5)
+	g.field.ball_vel = Vector2(0.0, -5.0)
+	var lost := false
+	var seen := 0
+	for i in 240:
+		g.step_once(1.0 / 120.0)
+		seen = maxi(seen, g._trail.point_count())
+		if g.field.attached:
+			lost = true
+			break
+	assert(lost, "공이 데드존까지 안 내려갔다")
+	assert(seen > 0, "떨어지는 동안 트레일이 쌓이질 않았다 — 테스트가 헛돈다")
+	assert(g._trail.point_count() == 0,
+		"목숨을 잃은 뒤에도 트레일 점이 남아 있다: %d" % g._trail.point_count())
 	g.free()
 
 func _test_screen_point_maps_to_board() -> void:

@@ -32,6 +32,12 @@ static func color_for(speed: float) -> Color:
 func point_count() -> int:
 	return _points.size()
 
+# 목숨을 잃으면 이력을 버린다. 안 버리면 죽은 자리의 리본이 다음 발사까지
+# 화면에 남고, 발사 순간 옛 점과 새 점이 한 줄로 이어져 버린다.
+func reset() -> void:
+	_points.clear()
+	_mesh.clear_surfaces()
+
 func push(p: Vector2, speed: float) -> void:
 	_points.push_back(p)
 	while _points.size() > sample_count(speed):

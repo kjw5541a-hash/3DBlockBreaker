@@ -28,6 +28,8 @@ func _physics_process(delta: float) -> void:
 func step_once(delta: float) -> void:
 	var r := field.step(_target, delta)
 	board.sync(field)
+	if bool(r["lost"]):
+		_trail.reset()
 	if not field.attached:
 		_trail.push(field.ball_pos, field.ball_vel.length())
 	if bool(r["lost"]) or bool(r["cleared"]):
