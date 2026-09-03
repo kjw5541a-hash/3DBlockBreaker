@@ -8,6 +8,7 @@ extends Node3D
 var field: PlayField
 # 손가락이 닿기 전에는 패들을 제자리에 둔다.
 var _target: Vector2
+var _trail: BallTrail
 
 func _ready() -> void:
 	field = PlayField.new()
@@ -17,6 +18,8 @@ func _ready() -> void:
 	# 어느 브랜치의 어느 커밋인지 눈으로 구별하려는 것이다.
 	version_label.text = str(ProjectSettings.get_setting("application/config/version"))
 	_update_hud()
+	_trail = BallTrail.new()
+	board.add_child(_trail)
 
 func _physics_process(delta: float) -> void:
 	step_once(delta)
@@ -25,6 +28,8 @@ func _physics_process(delta: float) -> void:
 func step_once(delta: float) -> void:
 	var r := field.step(_target, delta)
 	board.sync(field)
+	if not field.attached:
+		_trail.push(field.ball_pos, field.ball_vel.length())
 	if bool(r["lost"]) or bool(r["cleared"]):
 		_update_hud()
 	if bool(r["cleared"]):
