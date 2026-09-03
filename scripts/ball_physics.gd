@@ -24,3 +24,36 @@ static func enforce_min_angle(v: Vector2, min_deg: float) -> Vector2:
 	var sign_y := 1.0 if v.y >= 0.0 else -1.0
 	var sign_x := 1.0 if v.x >= 0.0 else -1.0
 	return Vector2(sign_x * s * cos(deg_to_rad(min_deg)), sign_y * s * min_sin)
+
+# 세미암시적 오일러. 속도를 먼저 갱신하고 그 속도로 위치를 옮긴다.
+# 순서를 바꾸면 에너지가 조금씩 늘어 감쇠 설계가 무너진다.
+static func step_vel(vel: Vector2, dt: float) -> Vector2:
+	return vel + Vector2(0.0, -Tuning.GRAVITY) * dt
+
+static func step_pos(pos: Vector2, vel: Vector2, dt: float) -> Vector2:
+	return pos + vel * dt
+
+# 한 스텝 이동거리가 공 반지름을 넘으면 얇은 블럭을 그냥 통과한다.
+static func substeps(speed: float, dt: float) -> int:
+	return maxi(1, int(ceil(speed * dt / Tuning.BALL_RADIUS)))
+
+# 좌우 벽과 상단 벽. 반발계수 1.0 — 에너지를 잃는 곳은 패들뿐이다.
+# 파고든 만큼 위치를 되밀고 속도 부호를 안쪽으로 강제한다. 부호를
+# 뒤집는 대신 강제하는 것은, 한 프레임에 두 번 처리돼도 벽에 들러붙지
+# 않게 하려는 것이다.
+static func resolve_walls(pos: Vector2, vel: Vector2) -> Array[Vector2]:
+	var p := pos
+	var v := vel
+	var lim := Tuning.BOARD_HALF_WIDTH - Tuning.BALL_RADIUS
+	if p.x < -lim:
+		p.x = -lim
+		v.x = absf(v.x)
+	elif p.x > lim:
+		p.x = lim
+		v.x = -absf(v.x)
+	var top := Tuning.BOARD_TOP_V - Tuning.BALL_RADIUS
+	if p.y > top:
+		p.y = top
+		v.y = -absf(v.y)
+	var out: Array[Vector2] = [p, v]
+	return out
