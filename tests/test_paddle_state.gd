@@ -16,9 +16,11 @@ const DT := 1.0 / 120.0
 
 func _test_follows_finger_sideways() -> void:
 	var p := PaddleState.new(0.0)
+	# 판 밖을 목표로 주면 클램프에 걸려 테스트가 조작 자체를 못 본다.
+	var goal := Tuning.BOARD_HALF_WIDTH * 0.5
 	for i in 60:
-		p.update(Vector2(3.0, Tuning.PADDLE_BAND_MIN_V), DT)
-	assert(absf(p.pos.x - 3.0) < 0.01, "손가락을 못 따라갔다: %f" % p.pos.x)
+		p.update(Vector2(goal, Tuning.PADDLE_BAND_MIN_V), DT)
+	assert(absf(p.pos.x - goal) < 0.01, "손가락을 못 따라갔다: %f" % p.pos.x)
 
 func _test_forward_push_is_slower_than_sideways() -> void:
 	var a := PaddleState.new(0.0)

@@ -33,8 +33,12 @@ func _test_geometry_is_consistent() -> void:
 		"패들 밴드가 블럭 격자와 겹친다")
 	assert(Tuning.BRICK_TOP_V < Tuning.BOARD_TOP_V, "블럭이 상단 벽을 넘는다")
 	assert(is_equal_approx(Tuning.BRICK_TOP_V - Tuning.BRICK_BOTTOM_V,
-		float(Tuning.BRICK_ROWS)), "블럭 격자 세로 길이와 줄 수가 어긋난다")
+		float(Tuning.BRICK_ROWS) * BrickGrid.CELL_H),
+		"블럭 격자 세로 길이와 줄 수가 어긋난다")
 	assert(is_equal_approx(2.0 * Tuning.BOARD_HALF_WIDTH,
-		float(Tuning.BRICK_COLS)), "판 폭과 열 수가 어긋난다")
+		float(Tuning.BRICK_COLS) * BrickGrid.CELL_W), "판 폭과 열 수가 어긋난다")
+	# 공이 셀보다 크면 격자 사이로 못 지나가고 반사가 이상해진다.
+	assert(Tuning.BALL_RADIUS * 2.0 < BrickGrid.CELL_W,
+		"공이 블럭 한 칸보다 넓다: %f vs %f" % [Tuning.BALL_RADIUS * 2.0, BrickGrid.CELL_W])
 	assert(Tuning.PADDLE_HALF_WIDTH < Tuning.BOARD_HALF_WIDTH,
 		"패들이 판보다 넓다")

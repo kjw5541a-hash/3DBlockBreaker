@@ -1,7 +1,10 @@
 class_name BrickGrid
 extends RefCounted
 
-const CELL := 1.0
+# 가로는 판 폭을 열 수로 나눈 값이고, 세로는 블럭 띠 높이를 줄 수로 나눈
+# 값이다. 판을 좁히면 블럭도 같이 좁아져야 하므로 리터럴로 두지 않는다.
+const CELL_W := 2.0 * Tuning.BOARD_HALF_WIDTH / float(Tuning.BRICK_COLS)
+const CELL_H := (Tuning.BRICK_TOP_V - Tuning.BRICK_BOTTOM_V) / float(Tuning.BRICK_ROWS)
 
 var cells: PackedInt32Array = PackedInt32Array()
 
@@ -16,9 +19,9 @@ static func index(col: int, row: int) -> int:
 # 두면 좌표 변환이 사라진다.
 static func cell_rect(col: int, row: int) -> Rect2:
 	return Rect2(
-		-Tuning.BOARD_HALF_WIDTH + float(col) * CELL,
-		Tuning.BRICK_BOTTOM_V + float(row) * CELL,
-		CELL, CELL)
+		-Tuning.BOARD_HALF_WIDTH + float(col) * CELL_W,
+		Tuning.BRICK_BOTTOM_V + float(row) * CELL_H,
+		CELL_W, CELL_H)
 
 func fill_all(kind: int) -> void:
 	cells.fill(kind)
@@ -49,8 +52,8 @@ func remaining() -> int:
 # 본다. 공간 분할 자료구조는 60칸짜리 격자에 과하다.
 func query(center: Vector2, radius: float) -> Dictionary:
 	var result := {"hit": false, "normal": Vector2.ZERO, "col": -1, "row": -1, "depth": 0.0}
-	var c0 := int(floor((center.x + Tuning.BOARD_HALF_WIDTH) / CELL))
-	var r0 := int(floor((center.y - Tuning.BRICK_BOTTOM_V) / CELL))
+	var c0 := int(floor((center.x + Tuning.BOARD_HALF_WIDTH) / CELL_W))
+	var r0 := int(floor((center.y - Tuning.BRICK_BOTTOM_V) / CELL_H))
 	var best_depth := 0.0
 	for dr in [-1, 0, 1]:
 		for dc in [-1, 0, 1]:

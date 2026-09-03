@@ -51,7 +51,8 @@ func _test_query_face_normal() -> void:
 	g.fill_all(1)
 	var r := BrickGrid.cell_rect(5, 0)
 	# 최하단 줄의 아래 면에 아래쪽에서 닿는다.
-	var center := Vector2(r.position.x + 0.5, r.position.y - 0.2)
+	var center := Vector2(r.position.x + BrickGrid.CELL_W * 0.5,
+		r.position.y - Tuning.BALL_RADIUS * 0.8)
 	var q := g.query(center, Tuning.BALL_RADIUS)
 	assert(q["hit"], "면에 닿았는데 못 잡았다")
 	assert(q["normal"].is_equal_approx(Vector2(0.0, -1.0)),
@@ -107,7 +108,7 @@ func _test_gap_between_bricks_does_not_thrash() -> void:
 	var g := BrickGrid.new()
 	g.fill_all(1)
 	var seam_u := BrickGrid.cell_rect(5, 0).position.x
-	var center := Vector2(seam_u, Tuning.BRICK_BOTTOM_V - 0.2)
+	var center := Vector2(seam_u, Tuning.BRICK_BOTTOM_V - Tuning.BALL_RADIUS * 0.8)
 	var q := g.query(center, Tuning.BALL_RADIUS)
 	assert(q["hit"], "이음매 아래에서 못 잡았다")
 	assert(q["normal"].y < -0.3,

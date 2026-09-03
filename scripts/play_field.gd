@@ -7,6 +7,9 @@ var ball_pos: Vector2
 var ball_vel: Vector2 = Vector2.ZERO
 var attached: bool = true
 var lives: int = Tuning.LIVES
+# 마지막으로 블럭을 깬 뒤 패들에 몇 번 튕겼는지. 속도 하한을 없앤 대신
+# 이 값이 교착을 끝낸다.
+var paddle_hits_since_brick: int = 0
 
 func _init() -> void:
 	grid = BrickGrid.new()
@@ -16,6 +19,7 @@ func _init() -> void:
 
 func _attach() -> void:
 	attached = true
+	paddle_hits_since_brick = 0
 	ball_vel = Vector2.ZERO
 	ball_pos = paddle.pos + Vector2(0.0, Tuning.PADDLE_THICKNESS * 0.5 + Tuning.BALL_RADIUS)
 
@@ -54,6 +58,7 @@ func step(target: Vector2, dt: float) -> Dictionary:
 		if q["hit"]:
 			grid.hit(q["col"], q["row"])
 			out["bricks_hit"] = int(out["bricks_hit"]) + 1
+			paddle_hits_since_brick = 0
 			# 블럭은 에너지를 잃지 않는다. 손실원은 패들뿐이다.
 			ball_vel = BallPhysics.reflect(ball_vel, q["normal"])
 			ball_pos += q["normal"] * q["depth"]
@@ -64,10 +69,12 @@ func step(target: Vector2, dt: float) -> Dictionary:
 			ball_vel = BallPhysics.paddle_bounce(before, n_p, paddle.vel)
 			if ball_vel != before:
 				out["paddle_hit"] = true
+				paddle_hits_since_brick += 1
 				# 패들 표면 밖으로 꺼내 다음 스텝에 다시 물리지 않게 한다.
 				ball_pos.y = paddle.pos.y + Tuning.PADDLE_THICKNESS * 0.5 + Tuning.BALL_RADIUS
 
-		if ball_pos.y < 0.0:
+		# 블럭을 못 깨고 패들에만 계속 튕기는 교착. 데드존과 똑같이 처리한다.
+		if ball_pos.y < 0.0 or paddle_hits_since_brick >= Tuning.STALL_PADDLE_HITS:
 			lives -= 1
 			out["lost"] = true
 			_attach()
