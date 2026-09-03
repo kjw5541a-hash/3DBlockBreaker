@@ -1,0 +1,33 @@
+; Engine configuration file.
+config_version=5
+
+[application]
+
+config/name="3DBlockBreaker"
+; 배포 워크플로가 빌드마다 날짜와 커밋 해시로 덮어쓴다. HUD 에 그대로
+; 표시되므로 폰에서 지금 어떤 빌드를 보고 있는지 바로 알 수 있다.
+config/version="dev"
+run/main_scene="res://scenes/game.tscn"
+config/features=PackedStringArray("4.7", "Forward Plus")
+
+[display]
+
+window/size/viewport_width=720
+window/size/viewport_height=1280
+window/handheld/orientation=1
+
+[physics]
+
+; 공이 빠를 때 한 스텝 이동거리를 줄여 터널링 여지를 좁힌다. 서브스텝은
+; 그래도 필요하지만, 시작점이 낮을수록 서브스텝 수가 적어진다.
+common/physics_ticks_per_second=120
+
+[rendering]
+
+renderer/rendering_method="forward_plus"
+
+[input_devices]
+
+; 데스크톱에는 InputEventScreenDrag 가 없다. 이게 없으면 조작 코드
+; 전체가 에디터와 맥에서 죽은 코드가 된다.
+pointing/emulate_touch_from_mouse=true
