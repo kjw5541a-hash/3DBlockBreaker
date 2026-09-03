@@ -10,7 +10,9 @@ func _initialize() -> void:
 func _run() -> void:
 	_test_scene_loads_and_runs()
 	_test_life_loss_clears_trail()
+	_test_last_life_restarts()
 	await _test_screen_point_maps_to_board()
+	await _test_board_fits_in_camera()
 	print("test_game_smoke: OK")
 	quit()
 
@@ -23,6 +25,9 @@ func _test_scene_loads_and_runs() -> void:
 	# 채우려고 손으로 부른다. 이 테스트는 카메라/월드가 필요 없어 이걸로
 	# 충분하다.
 	g._ready()
+	# 쏘지 않으면 field.step() 이 attached 경로로 조기 반환해 240 프레임을
+	# 돌려도 물리가 한 번도 안 돈다 — 단언이 자명 참이 된다.
+	g.field.launch(Vector2(6.0, 0.0))
 	# 물리 스텝을 손으로 돌린다. 헤드리스에는 _physics_process 가
 	# 돌아갈 프레임 루프가 없다.
 	for i in 240:
@@ -56,6 +61,33 @@ func _test_life_loss_clears_trail() -> void:
 		"목숨을 잃은 뒤에도 트레일 점이 남아 있다: %d" % g._trail.point_count())
 	g.free()
 
+# 마지막 목숨을 잃으면 목숨과 블럭이 모두 초기 상태로 돌아가야 한다.
+# 1단계에는 게임오버 화면이 없으므로 이게 유일한 종료 처리다.
+func _test_last_life_restarts() -> void:
+	var packed := load("res://scenes/game.tscn") as PackedScene
+	var g := packed.instantiate()
+	root.add_child(g)
+	g._ready()
+	g.field.lives = 1
+	g.field.grid.hit(0, 0)
+	g.field.attached = false
+	g.field.ball_pos = Vector2(4.0, 2.5)
+	g.field.ball_vel = Vector2(0.0, -5.0)
+	var lost := false
+	for i in 240:
+		g.step_once(1.0 / 120.0)
+		if g.field.attached:
+			lost = true
+			break
+	assert(lost, "공이 데드존까지 안 내려갔다")
+	assert(g.field.lives == Tuning.LIVES,
+		"마지막 목숨을 잃었는데 목숨이 안 돌아왔다: %d" % g.field.lives)
+	assert(g.field.grid.remaining() == Tuning.BRICK_COLS * Tuning.BRICK_ROWS,
+		"재시작인데 블럭이 안 채워졌다: %d" % g.field.grid.remaining())
+	assert(g.lives_label.text == "목숨 %d" % Tuning.LIVES,
+		"HUD 가 0 목숨을 그대로 보여준다: %s" % g.lives_label.text)
+	g.free()
+
 func _test_screen_point_maps_to_board() -> void:
 	var packed := load("res://scenes/game.tscn") as PackedScene
 	var g := packed.instantiate()
@@ -76,4 +108,49 @@ func _test_screen_point_maps_to_board() -> void:
 	var low: Vector2 = g.screen_to_board(Vector2(vp.x * 0.5, vp.y * 0.9))
 	var high: Vector2 = g.screen_to_board(Vector2(vp.x * 0.5, vp.y * 0.1))
 	assert(high.y > low.y, "화면 위쪽이 판 안쪽(v 큰 쪽)으로 안 간다: %f vs %f" % [high.y, low.y])
+	g.free()
+
+# 판 네 귀퉁이가 화면 안에 들어오는지. Camera3D 의 keep_aspect 기본값은
+# KEEP_HEIGHT 라 fov 가 세로각이고, 720x1280 세로 화면에서는 가로 화각이
+# 절반 이하로 좁아진다 — 눈으로 안 보면 좌우 벽과 위쪽 블럭 줄이 조용히
+# 화면 밖으로 나간다. 기울기·카메라·fov 중 뭘 건드려도 여기서 걸린다.
+#
+# is_position_in_frustum() 을 쓰지 않는 이유: 헤드리스 창은 64x64 라
+# 종횡비가 1.0 이다. 실제로 출하되는 해상도로 판정해야 의미가 있어서
+# 프로젝트 설정의 해상도로 화각을 직접 계산한다.
+func _test_board_fits_in_camera() -> void:
+	var packed := load("res://scenes/game.tscn") as PackedScene
+	var g := packed.instantiate()
+	root.add_child(g)
+	await process_frame
+	var board: Node3D = g.board
+	var cam: Camera3D = g.camera
+	assert(is_equal_approx(board.rotation.x, deg_to_rad(Tuning.BOARD_TILT_DEG)),
+		"씬의 판 기울기가 Tuning.BOARD_TILT_DEG 와 다르다: %f vs %f"
+		% [rad_to_deg(board.rotation.x), Tuning.BOARD_TILT_DEG])
+
+	var aspect := (
+		float(ProjectSettings.get_setting("display/window/size/viewport_width"))
+		/ float(ProjectSettings.get_setting("display/window/size/viewport_height")))
+	var half_h: float
+	var half_v: float
+	if cam.keep_aspect == Camera3D.KEEP_WIDTH:
+		half_h = deg_to_rad(cam.fov * 0.5)
+		half_v = atan(tan(half_h) / aspect)
+	else:
+		half_v = deg_to_rad(cam.fov * 0.5)
+		half_h = atan(tan(half_v) * aspect)
+
+	var inv := cam.global_transform.affine_inverse()
+	for u in [-Tuning.BOARD_HALF_WIDTH, Tuning.BOARD_HALF_WIDTH]:
+		for v in [0.0, Tuning.BOARD_TOP_V]:
+			var world: Vector3 = board.global_transform * BoardView.board_to_local(Vector2(u, v))
+			var l: Vector3 = inv * world
+			assert(l.z < 0.0, "판 귀퉁이 (%f, %f) 가 카메라 뒤에 있다" % [u, v])
+			var av := atan2(l.y, -l.z)
+			var ah := atan2(absf(l.x), -l.z)
+			assert(av < half_v, "판 귀퉁이 (%f, %f) 가 위아래로 화면 밖이다: %f도 > %f도"
+				% [u, v, rad_to_deg(av), rad_to_deg(half_v)])
+			assert(ah < half_h, "판 귀퉁이 (%f, %f) 가 좌우로 화면 밖이다: %f도 > %f도"
+				% [u, v, rad_to_deg(ah), rad_to_deg(half_h)])
 	g.free()
