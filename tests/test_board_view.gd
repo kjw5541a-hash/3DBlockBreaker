@@ -5,6 +5,7 @@ func _initialize() -> void:
 	_test_tilted_board_lifts_far_end()
 	_test_brick_heights_differ_by_kind()
 	_test_build_and_remove_bricks()
+	_test_walls_mark_the_boundary()
 	print("test_board_view: OK")
 	quit()
 
@@ -47,4 +48,27 @@ func _test_build_and_remove_bricks() -> void:
 	view.refresh_bricks(g)
 	assert(view.brick_count() == Tuning.BRICK_COLS * Tuning.BRICK_ROWS - 1,
 		"깬 블럭 메시가 안 사라졌다: %d" % view.brick_count())
+	view.free()
+
+# "공간은 남아 있는데 사실은 벽" 을 없애려는 것이다. 벽 세 개가 있고,
+# 안쪽 면이 정확히 판 경계에 붙어 있어야 경계가 거짓말을 안 한다.
+func _test_walls_mark_the_boundary() -> void:
+	var view := BoardView.new()
+	var g := BrickGrid.new()
+	g.fill_all(1)
+	view.build(g)
+	assert(view.wall_count() == 3, "벽이 세 개가 아니다: %d" % view.wall_count())
+	view.build(g)
+	assert(view.wall_count() == 3, "다시 지을 때 벽이 늘었다: %d" % view.wall_count())
+	assert(BoardView.WALL_THICKNESS > 0.0 and BoardView.WALL_HEIGHT > 0.0,
+		"벽이 안 보이는 크기다")
+	for w in view._walls:
+		var size: Vector3 = (w.mesh as BoxMesh).size
+		# 좌우 벽만 본다(상단 벽은 가로로 길다).
+		if size.x > size.z:
+			continue
+		var inner := absf(w.position.x) - size.x * 0.5
+		assert(is_equal_approx(inner, Tuning.BOARD_HALF_WIDTH),
+			"벽 안쪽 면이 판 경계와 어긋난다: %f, 경계 %f"
+			% [inner, Tuning.BOARD_HALF_WIDTH])
 	view.free()

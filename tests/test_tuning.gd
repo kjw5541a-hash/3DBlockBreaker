@@ -4,6 +4,7 @@ func _initialize() -> void:
 	_test_v_min_reaches_bottom_row()
 	_test_v_min_falls_short_of_second_row()
 	_test_v_max_reaches_top()
+	_test_speed_cap_ramps_with_time()
 	_test_geometry_is_consistent()
 	print("test_tuning: OK")
 	quit()
@@ -27,6 +28,25 @@ func _test_v_max_reaches_top() -> void:
 	var apex := _apex(Tuning.V_MAX)
 	assert(apex >= Tuning.BOARD_TOP_V,
 		"최대 속도로도 상단 벽에 못 닿는다: apex=%f" % apex)
+
+# 잘 맞은 공의 상한만 시간에 따라 오른다. 초반부터 34 면 손댈 수 없다.
+func _test_speed_cap_ramps_with_time() -> void:
+	assert(is_equal_approx(Tuning.v_max_at(0.0), Tuning.V_MAX_START),
+		"시작 상한이 V_MAX_START 가 아니다: %f" % Tuning.v_max_at(0.0))
+	assert(is_equal_approx(Tuning.v_max_at(Tuning.V_MAX_RAMP_SEC), Tuning.V_MAX),
+		"램프가 끝나도 V_MAX 에 안 닿는다: %f" % Tuning.v_max_at(Tuning.V_MAX_RAMP_SEC))
+	assert(is_equal_approx(Tuning.v_max_at(Tuning.V_MAX_RAMP_SEC * 10.0), Tuning.V_MAX),
+		"램프가 V_MAX 를 넘어간다: %f" % Tuning.v_max_at(Tuning.V_MAX_RAMP_SEC * 10.0))
+	var prev := Tuning.v_max_at(0.0)
+	for i in range(1, 10):
+		var now := Tuning.v_max_at(Tuning.V_MAX_RAMP_SEC * float(i) / 10.0)
+		assert(now > prev, "상한이 시간에 따라 안 오른다: %f -> %f" % [prev, now])
+		prev = now
+	assert(Tuning.V_MAX_START > Tuning.v_min(),
+		"시작 상한이 발사 속도보다 낮다")
+	# 초반에도 판 전체를 쓸 수 있어야 한다 — 안 그러면 위쪽 줄이 잠긴다.
+	assert(_apex(Tuning.V_MAX_START) >= Tuning.BOARD_TOP_V,
+		"시작 상한으로 상단 벽에 못 닿는다: apex=%f" % _apex(Tuning.V_MAX_START))
 
 func _test_geometry_is_consistent() -> void:
 	assert(Tuning.PADDLE_BAND_MAX_V < Tuning.BRICK_BOTTOM_V,

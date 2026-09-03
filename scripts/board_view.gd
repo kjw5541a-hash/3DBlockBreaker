@@ -6,6 +6,13 @@ extends Node3D
 var _bricks: Dictionary = {}   # index -> MeshInstance3D
 var _ball: MeshInstance3D
 var _paddle: MeshInstance3D
+var _walls: Array[MeshInstance3D] = []
+
+# 순수 시각값. 물리는 여전히 (u, v) 평면의 선분 하나로 튕긴다. 안쪽 면이
+# 정확히 판 경계에 오도록 바깥으로만 두께를 준다 — 벽이 공을 먹는 것처럼
+# 보이면 경계를 보여주려던 목적이 뒤집힌다.
+const WALL_THICKNESS := 0.16
+const WALL_HEIGHT := 0.5
 
 # (u, v) 는 판 로컬 평면 좌표다. 판 노드가 25° 기울어져 있으므로 여기서는
 # 기울기를 몰라도 된다 — 로컬 좌표만 만든다. 기울기를 바꿔도 이 함수는
@@ -39,6 +46,10 @@ func build(grid: BrickGrid) -> void:
 	if _paddle == null:
 		_paddle = _make_paddle()
 		add_child(_paddle)
+	if _walls.is_empty():
+		for w in _make_walls():
+			_walls.append(w)
+			add_child(w)
 
 func refresh_bricks(grid: BrickGrid) -> void:
 	for row in Tuning.BRICK_ROWS:
@@ -78,6 +89,37 @@ func _make_brick(col: int, row: int, kind: int) -> MeshInstance3D:
 	mat.albedo_color = Color.from_hsv(fmod(float(row) * 0.13, 1.0), 0.55, 0.9)
 	m.material_override = mat
 	# 블럭은 그림자를 드리우지 않는다. 웹 빌드와 폰 성능 때문이다.
+	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return m
+
+func wall_count() -> int:
+	return _walls.size()
+
+# 좌·우·상 세 개. 이게 없으면 남은 공간이 그냥 빈 곳으로 보여서 어디까지가
+# 판인지 눈으로 알 수 없다.
+func _make_walls() -> Array[MeshInstance3D]:
+	var t := WALL_THICKNESS
+	var top := Tuning.BOARD_TOP_V
+	var half := Tuning.BOARD_HALF_WIDTH
+	var out: Array[MeshInstance3D] = []
+	for side in [-1.0, 1.0]:
+		out.append(_make_wall(
+			Vector3(t, WALL_HEIGHT, top + t),
+			Vector2(side * (half + t * 0.5), (top + t) * 0.5)))
+	out.append(_make_wall(
+		Vector3(half * 2.0 + t * 2.0, WALL_HEIGHT, t),
+		Vector2(0.0, top + t * 0.5)))
+	return out
+
+func _make_wall(size: Vector3, center: Vector2) -> MeshInstance3D:
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	var m := MeshInstance3D.new()
+	m.mesh = mesh
+	m.position = board_to_local(center, WALL_HEIGHT * 0.5)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.22, 0.24, 0.32)
+	m.material_override = mat
 	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return m
 

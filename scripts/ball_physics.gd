@@ -62,12 +62,13 @@ static func resolve_walls(pos: Vector2, vel: Vector2) -> Array[Vector2]:
 #
 # 이미 패들에서 멀어지는 중이면 손대지 않는다. 접촉이 두 프레임 이어질 때
 # 두 번 튕겨 공이 패들 안에서 진동하는 것을 막는다.
-static func paddle_bounce(v_in: Vector2, normal: Vector2, paddle_vel: Vector2) -> Vector2:
+static func paddle_bounce(v_in: Vector2, normal: Vector2, paddle_vel: Vector2,
+		v_max: float) -> Vector2:
 	if v_in.dot(normal) >= 0.0:
 		return v_in
 	var out := reflect(v_in, normal) * Tuning.PADDLE_RESTITUTION
 	out += paddle_vel * Tuning.PADDLE_SPEED_TRANSFER
 	# 하한 없음. 가만히 받으면 반발계수만큼 계속 느려지고 도달 높이가
 	# 낮아진다 — 그 상태로 버티면 STALL_PADDLE_HITS 가 목숨을 가져간다.
-	out = clamp_speed(out, 0.0, Tuning.V_MAX)
+	out = clamp_speed(out, 0.0, v_max)
 	return enforce_min_angle(out, Tuning.MIN_ANGLE_DEG)

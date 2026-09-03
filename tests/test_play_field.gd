@@ -5,6 +5,7 @@ func _initialize() -> void:
 	_test_decay_sequence_never_stops()
 	_test_stall_costs_a_life()
 	_test_swing_accelerates_ball()
+	_test_early_game_caps_swing_speed()
 	_test_tilted_swing_changes_direction()
 	_test_paddle_never_double_bounces()
 	_test_ball_below_zero_costs_a_life()
@@ -157,3 +158,29 @@ func _test_clearing_all_bricks_reports_cleared() -> void:
 			break
 	assert(cleared, "마지막 블럭을 깼는데 cleared 가 안 나온다")
 	assert(f.grid.remaining() == 0, "블럭이 남아 있다")
+
+# 초반에는 아무리 세게 밀어도 V_MAX_START 를 못 넘는다. 램프가 다 오른
+# 뒤에는 그보다 빨라진다 — 같은 스윙, 다른 시각.
+func _test_early_game_caps_swing_speed() -> void:
+	var early := _max_swing_speed(0.0)
+	var late := _max_swing_speed(Tuning.V_MAX_RAMP_SEC)
+	# 공이 패들까지 떨어지는 몇 프레임 동안 램프도 조금 오른다.
+	assert(early <= Tuning.V_MAX_START + 0.1,
+		"초반인데 시작 상한을 넘었다: %f > %f" % [early, Tuning.V_MAX_START])
+	assert(late > early + 1.0,
+		"시간이 지나도 상한이 안 올랐다: %f -> %f" % [early, late])
+
+# 경과 시간을 넣고, 최대 속도로 밀며 받은 직후 속력을 돌려준다.
+func _max_swing_speed(elapsed: float) -> float:
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	f.attached = false
+	f.elapsed = elapsed
+	f.ball_pos = Vector2(0.0, Tuning.PADDLE_BAND_MAX_V + 1.0)
+	f.ball_vel = Vector2(0.0, -Tuning.V_MAX)
+	for i in 240:
+		var r := f.step(Vector2(0.0, Tuning.PADDLE_BAND_MAX_V), DT)
+		if r["paddle_hit"]:
+			return f.ball_vel.length()
+	assert(false, "패들에 안 맞았다")
+	return 0.0

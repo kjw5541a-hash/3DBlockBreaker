@@ -14,7 +14,7 @@ script = ExtResource("2")
 position = Vector3(0, 9.5, 12)
 rotation = Vector3(-0.386243, 0, 0)
 keep_aspect = 0
-fov = 26.0
+fov = 27.5
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 rotation = Vector3(-0.872665, -0.523599, 0)

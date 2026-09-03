@@ -10,6 +10,8 @@ var lives: int = Tuning.LIVES
 # 마지막으로 블럭을 깬 뒤 패들에 몇 번 튕겼는지. 속도 하한을 없앤 대신
 # 이 값이 교착을 끝낸다.
 var paddle_hits_since_brick: int = 0
+# 공이 살아 있던 누적 시간. 잘 맞은 공의 상한이 이 값으로 오른다.
+var elapsed: float = 0.0
 
 func _init() -> void:
 	grid = BrickGrid.new()
@@ -32,7 +34,7 @@ func launch(swing: Vector2) -> void:
 	ball_vel = BallPhysics.enforce_min_angle(
 		BallPhysics.clamp_speed(
 			Vector2(0.0, Tuning.v_min()) + swing * Tuning.PADDLE_SPEED_TRANSFER,
-			Tuning.v_min(), Tuning.V_MAX),
+			Tuning.v_min(), Tuning.v_max_at(elapsed)),
 		Tuning.MIN_ANGLE_DEG)
 
 func step(target: Vector2, dt: float) -> Dictionary:
@@ -41,6 +43,7 @@ func step(target: Vector2, dt: float) -> Dictionary:
 	if attached:
 		ball_pos = paddle.pos + Vector2(0.0, Tuning.PADDLE_THICKNESS * 0.5 + Tuning.BALL_RADIUS)
 		return out
+	elapsed += dt
 
 	# 한 스텝 이동거리가 반지름을 넘지 않도록 쪼갠다. 안 쪼개면 빠른
 	# 공이 얇은 블럭을 그냥 통과한다.
@@ -66,7 +69,8 @@ func step(target: Vector2, dt: float) -> Dictionary:
 		if not out["paddle_hit"] and _touches_paddle():
 			var n_p := paddle.contact_normal(ball_pos.x)
 			var before := ball_vel
-			ball_vel = BallPhysics.paddle_bounce(before, n_p, paddle.vel)
+			ball_vel = BallPhysics.paddle_bounce(before, n_p, paddle.vel,
+				Tuning.v_max_at(elapsed))
 			if ball_vel != before:
 				out["paddle_hit"] = true
 				paddle_hits_since_brick += 1

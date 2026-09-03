@@ -27,6 +27,11 @@ const PADDLE_BAND_MAX_V := 3.0
 const GRAVITY := 12.0
 const BALL_RADIUS := 0.18
 const V_MAX := 34.0
+# 상한이 처음부터 34 면 시작 몇 초 만에 손댈 수 없는 공이 나온다. 잘 맞은
+# 공의 상한을 경과 시간에 비례해 올려 초반을 느리게 만든다. V_MAX_START
+# 로도 상단 벽에는 닿는다(정점 17.07 > 16.0) — 초반부터 판 전체를 쓴다.
+const V_MAX_START := 20.0
+const V_MAX_RAMP_SEC := 90.0
 # 공이 수평에 가까워지면 좌우 벽만 오가며 영영 안 내려온다.
 const MIN_ANGLE_DEG := 15.0
 
@@ -65,5 +70,10 @@ const STALL_PADDLE_HITS := 3
 # 공 반지름과 패들 두께를 뺀 근사다. 실제로는 공 중심이 더 위에서 출발해
 # 최하단 줄 접촉면보다 조금 더 오른다 — 여유는 의도적으로 남긴다. 여유를
 # 없애면 탭 발사가 블럭에 못 닿는다.
+# 공이 살아서 굴러간 시간만 센다. 붙어 있는 동안은 안 센다 — 발사를 미루는
+# 것으로 난이도를 낮출 수 있으면 규칙이 아니라 요령이 된다.
+static func v_max_at(elapsed: float) -> float:
+	return lerpf(V_MAX_START, V_MAX, clampf(elapsed / V_MAX_RAMP_SEC, 0.0, 1.0))
+
 static func v_min() -> float:
 	return sqrt(2.0 * GRAVITY * (BRICK_BOTTOM_V - PADDLE_BAND_MIN_V))

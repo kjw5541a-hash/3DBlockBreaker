@@ -142,7 +142,9 @@ func _test_board_fits_in_camera() -> void:
 		half_h = atan(tan(half_v) * aspect)
 
 	var inv := cam.global_transform.affine_inverse()
-	for u in [-Tuning.BOARD_HALF_WIDTH, Tuning.BOARD_HALF_WIDTH]:
+	# 벽 메시가 판 경계 바깥으로 두께만큼 더 나간다 — 그것까지 보여야 한다.
+	var edge := Tuning.BOARD_HALF_WIDTH + BoardView.WALL_THICKNESS
+	for u in [-edge, edge]:
 		for v in [0.0, Tuning.BOARD_TOP_V]:
 			var world: Vector3 = board.global_transform * BoardView.board_to_local(Vector2(u, v))
 			var l: Vector3 = inv * world
