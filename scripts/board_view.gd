@@ -77,6 +77,8 @@ func _make_brick(col: int, row: int, kind: int) -> MeshInstance3D:
 	# 줄마다 색을 바꿔 어느 줄까지 닿았는지 눈으로 세게 한다.
 	mat.albedo_color = Color.from_hsv(fmod(float(row) * 0.13, 1.0), 0.55, 0.9)
 	m.material_override = mat
+	# 블럭은 그림자를 드리우지 않는다. 웹 빌드와 폰 성능 때문이다.
+	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return m
 
 func _make_ball() -> MeshInstance3D:
