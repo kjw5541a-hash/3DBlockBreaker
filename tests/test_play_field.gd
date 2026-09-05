@@ -10,6 +10,7 @@ func _initialize() -> void:
 	_test_paddle_never_double_bounces()
 	_test_ball_below_zero_costs_a_life()
 	_test_clearing_all_bricks_reports_cleared()
+	_test_hard_brick_only_resets_stall_when_broken()
 	print("test_play_field: OK")
 	quit()
 
@@ -184,3 +185,32 @@ func _max_swing_speed(elapsed: float) -> float:
 			return f.ball_vel.length()
 	assert(false, "패들에 안 맞았다")
 	return 0.0
+
+# 단단 블럭을 툭툭 건드리는 것으로 교착 규칙을 피할 수 있으면 규칙이
+# 아니라 요령이 된다. 리셋은 블럭이 실제로 깨졌을 때만이다.
+func _test_hard_brick_only_resets_stall_when_broken() -> void:
+	var f := PlayField.new()
+	var r := BrickGrid.cell_rect(5, 0)
+	var below := Vector2(r.position.x + BrickGrid.CELL_W * 0.5,
+		r.position.y - Tuning.BALL_RADIUS - 0.01)
+	f.grid.cells[BrickGrid.index(5, 0)] = 2
+	f.attached = false
+	f.paddle_hits_since_brick = 2
+
+	f.ball_pos = below
+	f.ball_vel = Vector2(0.0, 8.0)
+	f.step(f.paddle.pos, 1.0 / 120.0)
+	assert(f.grid.get_cell(5, 0) == 1,
+		"단단 블럭이 한 대에 사라졌다: %d" % f.grid.get_cell(5, 0))
+	assert(f.paddle_hits_since_brick == 2,
+		"안 깨진 블럭이 교착 카운터를 리셋했다: %d" % f.paddle_hits_since_brick)
+
+	f.ball_pos = below
+	f.ball_vel = Vector2(0.0, 8.0)
+	var out := f.step(f.paddle.pos, 1.0 / 120.0)
+	assert(f.grid.get_cell(5, 0) == 0,
+		"두 번째 히트에 안 깨졌다: %d" % f.grid.get_cell(5, 0))
+	assert(f.paddle_hits_since_brick == 0,
+		"깨졌는데 교착 카운터가 안 리셋됐다: %d" % f.paddle_hits_since_brick)
+	assert(int(out["bricks_hit"]) == 1,
+		"bricks_hit 이 깨진 개수를 안 센다: %d" % int(out["bricks_hit"]))

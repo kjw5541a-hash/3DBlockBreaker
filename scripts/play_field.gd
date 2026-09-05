@@ -60,8 +60,12 @@ func step(target: Vector2, dt: float) -> Dictionary:
 		var q := grid.query(ball_pos, Tuning.BALL_RADIUS)
 		if q["hit"]:
 			grid.hit(q["col"], q["row"])
-			out["bricks_hit"] = int(out["bricks_hit"]) + 1
-			paddle_hits_since_brick = 0
+			# 깨졌을 때만 센다. 단단 블럭을 툭툭 건드리는 것으로 교착 규칙을
+			# 피할 수 있으면 규칙이 아니라 요령이 된다. 불괴 블럭은 영원히
+			# 안 깨지므로 영원히 리셋하지 않는다 — 그게 맞다.
+			if grid.get_cell(q["col"], q["row"]) == 0:
+				out["bricks_hit"] = int(out["bricks_hit"]) + 1
+				paddle_hits_since_brick = 0
 			# 블럭은 에너지를 잃지 않는다. 손실원은 패들뿐이다.
 			ball_vel = BallPhysics.reflect(ball_vel, q["normal"])
 			ball_pos += q["normal"] * q["depth"]
