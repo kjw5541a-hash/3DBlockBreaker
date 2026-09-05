@@ -4,6 +4,9 @@ extends Node3D
 # 블럭 60개는 개별 MeshInstance3D 로 충분하다. MultiMesh 배칭은 이
 # 규모에 과하고, 배칭하면 개별 파괴 연출이 즉시 번거로워진다.
 var _bricks: Dictionary = {}   # index -> MeshInstance3D
+# index -> 마지막으로 그린 칸 값. 이게 없으면 단단 블럭이 한 대 맞아도
+# 화면이 그대로다.
+var _brick_kinds: Dictionary = {}
 var _ball: MeshInstance3D
 var _paddle: MeshInstance3D
 var _walls: Array[MeshInstance3D] = []
@@ -26,11 +29,28 @@ static func board_to_local(p: Vector2, height: float = 0.0) -> Vector3:
 
 # 높이는 순수 시각 값이다. 물리 충돌은 (u, v) 평면의 AABB 뿐이고 이
 # 값은 메시 두께만 정한다. 기울어진 판에서 두께 차가 원근으로 드러난다.
+#
+# 두께는 종류를 뜻한다. 단단 블럭은 맞아서 값이 3 에서 2 로 줄어도 두께가
+# 같다 — 남은 히트는 색으로 보여준다.
 static func brick_height(kind: int) -> float:
-	match kind:
-		2: return 0.6
-		3: return 0.8
-		_: return 0.4
+	if kind == BrickGrid.INDESTRUCTIBLE:
+		return 0.8
+	if kind >= 2:
+		return 0.6
+	return 0.4
+
+# 일반 블럭은 줄마다 색을 바꿔 어느 줄까지 닿았는지 눈으로 세게 한다.
+# 단단 블럭은 은색이고 남은 히트가 줄수록 어두워진다. 불괴는 금색이다.
+static func brick_color(kind: int, row: int) -> Color:
+	if kind == BrickGrid.INDESTRUCTIBLE:
+		return Color(0.85, 0.72, 0.25)
+	if kind >= 2:
+		# kind 3 -> 1.0, kind 2 -> 0.5. Color 에 float 을 곱하면 알파까지
+		# 같이 어두워지므로 성분별로 곱한다.
+		var t := float(kind - 1) / 2.0
+		var k := lerpf(0.6, 1.0, t)
+		return Color(0.55 * k, 0.58 * k, 0.62 * k)
+	return Color.from_hsv(fmod(float(row) * 0.13, 1.0), 0.55, 0.9)
 
 func brick_count() -> int:
 	return _bricks.size()
@@ -39,6 +59,7 @@ func build(grid: BrickGrid) -> void:
 	for key in _bricks.keys():
 		(_bricks[key] as Node).free()
 	_bricks.clear()
+	_brick_kinds.clear()
 	refresh_bricks(grid)
 	if _ball == null:
 		_ball = _make_ball()
@@ -62,11 +83,19 @@ func refresh_bricks(grid: BrickGrid) -> void:
 					# queue_free 는 SceneTree 밖에서 처리 시점이 불확실하다.
 					(_bricks[i] as Node).free()
 					_bricks.erase(i)
+					_brick_kinds.erase(i)
 				continue
 			if _bricks.has(i):
-				continue
+				if int(_brick_kinds[i]) == kind:
+					continue
+				# 단단 블럭이 한 대 맞아 색이 달라졌다. 재질만 갈아끼우지 않고
+				# 지우고 다시 만드는 것은 종류가 바뀌면 두께도 따라와야 해서다.
+				# 60 개짜리 격자에서 재생성은 부담이 아니다.
+				(_bricks[i] as Node).free()
+				_bricks.erase(i)
 			var m := _make_brick(col, row, kind)
 			_bricks[i] = m
+			_brick_kinds[i] = kind
 			add_child(m)
 
 func sync(field: PlayField) -> void:
@@ -85,8 +114,7 @@ func _make_brick(col: int, row: int, kind: int) -> MeshInstance3D:
 	m.mesh = mesh
 	m.position = board_to_local(rect.position + rect.size * 0.5, h * 0.5)
 	var mat := StandardMaterial3D.new()
-	# 줄마다 색을 바꿔 어느 줄까지 닿았는지 눈으로 세게 한다.
-	mat.albedo_color = Color.from_hsv(fmod(float(row) * 0.13, 1.0), 0.55, 0.9)
+	mat.albedo_color = brick_color(kind, row)
 	m.material_override = mat
 	# 블럭은 그림자를 드리우지 않는다. 웹 빌드와 폰 성능 때문이다.
 	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
