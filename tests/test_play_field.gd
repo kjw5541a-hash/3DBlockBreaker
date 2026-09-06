@@ -11,6 +11,7 @@ func _initialize() -> void:
 	_test_ball_below_zero_costs_a_life()
 	_test_clearing_all_bricks_reports_cleared()
 	_test_hard_brick_only_resets_stall_when_broken()
+	_test_resting_ball_does_not_chip_a_brick_every_frame()
 	print("test_play_field: OK")
 	quit()
 
@@ -205,6 +206,11 @@ func _test_hard_brick_only_resets_stall_when_broken() -> void:
 	assert(f.paddle_hits_since_brick == 2,
 		"안 깨진 블럭이 교착 카운터를 리셋했다: %d" % f.paddle_hits_since_brick)
 
+	# 실제 플레이라면 첫 히트 후 반사로 공이 멀어져 한동안 안 닿는 프레임이
+	# 있었을 것이다 — 여기선 위치를 손으로 되돌리므로 그 "떠난 프레임"이
+	# 없다. 디바운스가 이걸 "같은 접촉이 계속됨"으로 오인해 두 번째 히트를
+	# 건너뛰지 않도록 직접 리셋해 별개의 타격임을 알린다.
+	f._last_damaged = -1
 	f.ball_pos = below
 	f.ball_vel = Vector2(0.0, 8.0)
 	var out := f.step(f.paddle.pos, 1.0 / 120.0)
@@ -214,3 +220,31 @@ func _test_hard_brick_only_resets_stall_when_broken() -> void:
 		"깨졌는데 교착 카운터가 안 리셋됐다: %d" % f.paddle_hits_since_brick)
 	assert(int(out["bricks_hit"]) == 1,
 		"bricks_hit 이 깨진 개수를 안 센다: %d" % int(out["bricks_hit"]))
+
+# 반지름보다 빠른 공은 한 스텝이 서브스텝 여러 개로 쪼개진다(57번째 줄
+# substeps 참고). 수평 속도를 충분히 올리면 서브스텝이 2개가 되고, 수직
+# 속도를 중력 한 킥의 절반보다 작게 주면 첫 서브스텝에서 맞고 튕긴 뒤
+# 두 번째 서브스텝에서 또 같은 칸에 박힌다 — 두 서브스텝 사이엔 한
+# 프레임치 반사-낙하 시간이 없어 진짜로 미스 없이 연속 히트가 난다.
+# (0.4, 0.2) 처럼 느린 공은 서브스텝이 1개뿐이라 반사가 항상 다음
+# "프레임"에 가서야 재충돌하고, 그 사이 최소 한 번은 미스가 끼어들어
+# 디바운스가 있으나 없으나 결과가 같다 — 그래서 이 시나리오를 쓴다.
+func _test_resting_ball_does_not_chip_a_brick_every_frame() -> void:
+	var f := PlayField.new()
+	var r := BrickGrid.cell_rect(5, 0)
+	# 위 줄을 비워야 한다 — 안 비우면 공이 실제로는 row 1 블럭 위에 얹혀
+	# 이 테스트가 겨냥한 블럭과 다른 블럭을 때린다.
+	f.grid.fill_all(0)
+	f.grid.cells[BrickGrid.index(5, 0)] = 3
+	f.attached = false
+	# 윗면 바로 위, 닿을 듯 말 듯한 높이에서 시작한다.
+	f.ball_pos = Vector2(r.position.x + BrickGrid.CELL_W * 0.5,
+		r.position.y + r.size.y + Tuning.BALL_RADIUS)
+	# 반지름/dt 의 1.2배 = 서브스텝 2개를 확실히 보장하는 수평 속도.
+	# 수직 속도는 중력 한 킥(서브스텝 기준)의 1/4 — 0 과 킥의 절반 사이라
+	# 두 서브스텝 다 파고들게 만드는 범위 한가운데다.
+	f.ball_vel = Vector2(Tuning.BALL_RADIUS / DT * 1.2, Tuning.GRAVITY * DT / 4.0)
+	for i in 6:
+		f.step(f.paddle.pos, DT)
+	assert(f.grid.get_cell(5, 0) >= 2,
+		"같은 프레임 안에서 같은 칸을 두 번 이상 깎았다: %d" % f.grid.get_cell(5, 0))

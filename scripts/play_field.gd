@@ -12,6 +12,12 @@ var lives: int = Tuning.LIVES
 var paddle_hits_since_brick: int = 0
 # 공이 살아 있던 누적 시간. 잘 맞은 공의 상한이 이 값으로 오른다.
 var elapsed: float = 0.0
+# 직전 서브스텝에 상처를 준 칸. 정지에 가까운 공은 블럭 위에 얹힌 채 매
+# 프레임 다시 파고들고, 그때마다 hit() 을 부르면 3히트 블럭이 0.05초에
+# 죽는다. 같은 칸을 연속으로 두 번 깎지 않는다 — 공이 한 번이라도 떨어지면
+# 다음 접촉은 새 타격이다. -1 은 "직전에 깎은 칸 없음" 이지 브릭 종류가
+# 아니다 — BrickGrid.INDESTRUCTIBLE 의 -1 과는 다른 뜻이다.
+var _last_damaged: int = -1
 
 func _init() -> void:
 	grid = BrickGrid.new()
@@ -24,6 +30,7 @@ func _attach() -> void:
 	paddle_hits_since_brick = 0
 	ball_vel = Vector2.ZERO
 	ball_pos = paddle.pos + Vector2(0.0, Tuning.PADDLE_THICKNESS * 0.5 + Tuning.BALL_RADIUS)
+	_last_damaged = -1
 
 # 붙어 있는 공을 스윙 속도로 쏜다. 탭만 하면(스윙 0) 하한으로 수직
 # 발사한다. 첫 입력부터 스윙 문법을 가르치므로 튜토리얼이 필요 없다.
@@ -59,16 +66,27 @@ func step(target: Vector2, dt: float) -> Dictionary:
 
 		var q := grid.query(ball_pos, Tuning.BALL_RADIUS)
 		if q["hit"]:
-			grid.hit(q["col"], q["row"])
-			# 깨졌을 때만 센다. 단단 블럭을 툭툭 건드리는 것으로 교착 규칙을
-			# 피할 수 있으면 규칙이 아니라 요령이 된다. 불괴 블럭은 영원히
-			# 안 깨지므로 영원히 리셋하지 않는다 — 그게 맞다.
-			if grid.get_cell(q["col"], q["row"]) == 0:
-				out["bricks_hit"] = int(out["bricks_hit"]) + 1
-				paddle_hits_since_brick = 0
-			# 블럭은 에너지를 잃지 않는다. 손실원은 패들뿐이다.
+			var i := BrickGrid.index(q["col"], q["row"])
+			# 정지에 가까운 공은 블럭 위에 얹힌 채 중력에 매 프레임 다시
+			# 파고든다 — 그때마다 hit() 을 부르면 여러 히트짜리 블럭이 몇
+			# 프레임 만에 죽는다. 같은 칸이면 깎지 않는다.
+			if i != _last_damaged:
+				grid.hit(q["col"], q["row"])
+				# 깨졌을 때만 센다. 단단 블럭을 툭툭 건드리는 것으로 교착 규칙을
+				# 피할 수 있으면 규칙이 아니라 요령이 된다. 불괴 블럭은 영원히
+				# 안 깨지므로 영원히 리셋하지 않는다 — 그게 맞다.
+				if grid.get_cell(q["col"], q["row"]) == 0:
+					out["bricks_hit"] = int(out["bricks_hit"]) + 1
+					paddle_hits_since_brick = 0
+			_last_damaged = i
+			# 블럭은 에너지를 잃지 않는다. 손실원은 패들뿐이다. 반사는
+			# 디바운스와 무관하게 항상 일어난다 — 그렇지 않으면 공이 블럭
+			# 안으로 파고들며 멈춘다.
 			ball_vel = BallPhysics.reflect(ball_vel, q["normal"])
 			ball_pos += q["normal"] * q["depth"]
+		else:
+			# 공이 블럭을 떠났다 — 다음 접촉은 새 타격이다.
+			_last_damaged = -1
 
 		if not out["paddle_hit"] and _touches_paddle():
 			var n_p := paddle.contact_normal(ball_pos.x)
