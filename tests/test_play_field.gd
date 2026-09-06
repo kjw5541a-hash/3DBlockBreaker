@@ -12,6 +12,7 @@ func _initialize() -> void:
 	_test_clearing_all_bricks_reports_cleared()
 	_test_hard_brick_only_resets_stall_when_broken()
 	_test_resting_ball_does_not_chip_a_brick_every_frame()
+	_test_broken_list_carries_kind_before_the_destroying_hit()
 	print("test_play_field: OK")
 	quit()
 
@@ -220,6 +221,31 @@ func _test_hard_brick_only_resets_stall_when_broken() -> void:
 		"깨졌는데 교착 카운터가 안 리셋됐다: %d" % f.paddle_hits_since_brick)
 	assert(int(out["bricks_hit"]) == 1,
 		"bricks_hit 이 깨진 개수를 안 센다: %d" % int(out["bricks_hit"]))
+
+# out["bricks_hit"] 은 개수만 셀 뿐 무엇이 깨졌는지 말해주지 않는다.
+# broken 은 col/row/kind 를 실어 나른다 — kind 는 hit() 이 칸 값을 깎기
+# *직전*의 값이어야 한다. 마지막 히트는 이미 kind == 1 (남은 히트 1)인
+# 상태에서 맞아 0 이 되므로, broken 에 기록될 값은 1 이다 — 3 이 아니다.
+# 나중에 "원래 몇 히트짜리였는지 궁금하니 3으로 바꾸자"고 오해하지 말 것.
+func _test_broken_list_carries_kind_before_the_destroying_hit() -> void:
+	var f := PlayField.new()
+	var r := BrickGrid.cell_rect(5, 0)
+	var below := Vector2(r.position.x + BrickGrid.CELL_W * 0.5,
+		r.position.y - Tuning.BALL_RADIUS - 0.01)
+	f.grid.fill_all(0)
+	f.grid.cells[BrickGrid.index(5, 0)] = 1
+	f.attached = false
+	f.ball_pos = below
+	f.ball_vel = Vector2(0.0, 8.0)
+	var out := f.step(f.paddle.pos, DT)
+	assert(f.grid.get_cell(5, 0) == 0, "블럭이 안 깨졌다: %d" % f.grid.get_cell(5, 0))
+	var broken: Array = out["broken"]
+	assert(broken.size() == 1, "broken 항목 수가 틀렸다: %d" % broken.size())
+	assert(int(broken[0]["col"]) == 5 and int(broken[0]["row"]) == 0,
+		"broken 의 col/row 가 틀렸다: %s" % broken[0])
+	assert(int(broken[0]["kind"]) == 1,
+		"broken 의 kind 는 깎이기 직전 값(1)이어야 한다 — 원래 히트 수가 아니다: %d"
+		% int(broken[0]["kind"]))
 
 # 반지름보다 빠른 공은 한 스텝이 서브스텝 여러 개로 쪼개진다(57번째 줄
 # substeps 참고). 수평 속도를 충분히 올리면 서브스텝이 2개가 되고, 수직

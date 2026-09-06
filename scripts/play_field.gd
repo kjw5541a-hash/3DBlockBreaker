@@ -46,7 +46,7 @@ func launch(swing: Vector2) -> void:
 
 func step(target: Vector2, dt: float) -> Dictionary:
 	paddle.update(target, dt)
-	var out := {"paddle_hit": false, "bricks_hit": 0, "lost": false, "cleared": false}
+	var out := {"paddle_hit": false, "bricks_hit": 0, "broken": [], "lost": false, "cleared": false}
 	if attached:
 		ball_pos = paddle.pos + Vector2(0.0, Tuning.PADDLE_THICKNESS * 0.5 + Tuning.BALL_RADIUS)
 		return out
@@ -71,12 +71,17 @@ func step(target: Vector2, dt: float) -> Dictionary:
 			# 파고든다 — 그때마다 hit() 을 부르면 여러 히트짜리 블럭이 몇
 			# 프레임 만에 죽는다. 같은 칸이면 깎지 않는다.
 			if i != _last_damaged:
+				# hit() 이 칸 값을 깎아 버리므로 먼저 읽어 둔다 — 안 그러면 마지막
+				# 히트에서는 종류가 이미 0 이 되어 무엇이 깨졌는지 알 수 없다.
+				var kind := grid.get_cell(q["col"], q["row"])
 				grid.hit(q["col"], q["row"])
 				# 깨졌을 때만 센다. 단단 블럭을 툭툭 건드리는 것으로 교착 규칙을
 				# 피할 수 있으면 규칙이 아니라 요령이 된다. 불괴 블럭은 영원히
 				# 안 깨지므로 영원히 리셋하지 않는다 — 그게 맞다.
 				if grid.get_cell(q["col"], q["row"]) == 0:
-					out["bricks_hit"] = int(out["bricks_hit"]) + 1
+					(out["broken"] as Array).append(
+						{"col": q["col"], "row": q["row"], "kind": kind})
+					out["bricks_hit"] = (out["broken"] as Array).size()
 					paddle_hits_since_brick = 0
 			_last_damaged = i
 			# 블럭은 에너지를 잃지 않는다. 손실원은 패들뿐이다. 반사는
