@@ -31,8 +31,8 @@ text = "목숨 3"
 
 [node name="Version" type="Label" parent="HUD"]
 offset_left = 24.0
-offset_top = 1244.0
-offset_right = 320.0
+offset_top = 1228.0
+offset_right = 620.0
 offset_bottom = 1268.0
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 24
 text = "dev"
