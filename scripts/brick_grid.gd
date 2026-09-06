@@ -6,6 +6,11 @@ extends RefCounted
 const CELL_W := 2.0 * Tuning.BOARD_HALF_WIDTH / float(Tuning.BRICK_COLS)
 const CELL_H := (Tuning.BRICK_TOP_V - Tuning.BRICK_BOTTOM_V) / float(Tuning.BRICK_ROWS)
 
+# 한 칸의 값이 곧 종류다. 0 빈칸, 양수는 남은 히트 수(1 일반, 2~3 단단),
+# -1 은 불괴다. 병렬 배열이나 별도 클래스를 두지 않는 이유는 hit() 이
+# 그냥 뺄셈 하나로 끝나기 때문이다.
+const INDESTRUCTIBLE := -1
+
 var cells: PackedInt32Array = PackedInt32Array()
 
 func _init() -> void:
@@ -34,12 +39,16 @@ func get_cell(col: int, row: int) -> int:
 func hit(col: int, row: int) -> void:
 	if col < 0 or col >= Tuning.BRICK_COLS or row < 0 or row >= Tuning.BRICK_ROWS:
 		return
-	cells[index(col, row)] = 0
+	var i := index(col, row)
+	# 불괴(-1)와 빈칸(0)은 뺄셈 대상이 아니다.
+	if cells[i] > 0:
+		cells[i] -= 1
 
+# 깰 수 있는 칸만 센다. 불괴는 남아 있어도 클리어를 막지 않는다.
 func remaining() -> int:
 	var n := 0
 	for c in cells:
-		if c != 0:
+		if c > 0:
 			n += 1
 	return n
 

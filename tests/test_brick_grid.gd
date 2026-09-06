@@ -9,6 +9,10 @@ func _initialize() -> void:
 	_test_query_misses_empty_cell()
 	_test_no_tunneling_at_max_speed()
 	_test_gap_between_bricks_does_not_thrash()
+	_test_hard_brick_takes_three_hits()
+	_test_indestructible_never_breaks()
+	_test_indestructible_is_not_counted_as_remaining()
+	_test_indestructible_still_bounces()
 	print("test_brick_grid: OK")
 	quit()
 
@@ -115,3 +119,47 @@ func _test_gap_between_bricks_does_not_thrash() -> void:
 		"이음매에서 법선이 아래를 안 가리킨다 — 공이 격자 안으로 빨려든다: %s" % q["normal"])
 	assert(is_equal_approx(q["normal"].length(), 1.0),
 		"법선이 단위벡터가 아니다: %f" % q["normal"].length())
+
+# 단단 블럭은 값이 곧 남은 히트 수다. 중간 상태가 remaining() 에서 사라지면
+# 아직 안 깬 블럭을 두고 판이 클리어된다.
+func _test_hard_brick_takes_three_hits() -> void:
+	var g := BrickGrid.new()
+	g.cells[BrickGrid.index(2, 1)] = 3
+	assert(g.remaining() == 1, "단단 블럭이 안 세어진다: %d" % g.remaining())
+	g.hit(2, 1)
+	assert(g.get_cell(2, 1) == 2, "첫 히트에 값이 안 줄었다: %d" % g.get_cell(2, 1))
+	g.hit(2, 1)
+	assert(g.get_cell(2, 1) == 1, "둘째 히트에 값이 안 줄었다: %d" % g.get_cell(2, 1))
+	assert(g.remaining() == 1, "덜 깨진 블럭이 이미 사라진 것으로 세어진다")
+	g.hit(2, 1)
+	assert(g.get_cell(2, 1) == 0, "셋째 히트에 안 깨졌다: %d" % g.get_cell(2, 1))
+	assert(g.remaining() == 0, "다 깼는데 남은 수가 0 이 아니다: %d" % g.remaining())
+
+func _test_indestructible_never_breaks() -> void:
+	var g := BrickGrid.new()
+	g.cells[BrickGrid.index(4, 3)] = BrickGrid.INDESTRUCTIBLE
+	for i in 10:
+		g.hit(4, 3)
+	assert(g.get_cell(4, 3) == BrickGrid.INDESTRUCTIBLE,
+		"불괴 블럭이 열 대에 변했다: %d" % g.get_cell(4, 3))
+
+# 불괴만 남은 판은 클리어된 판이다. 안 그러면 영원히 안 끝난다.
+func _test_indestructible_is_not_counted_as_remaining() -> void:
+	var g := BrickGrid.new()
+	g.cells[BrickGrid.index(4, 3)] = BrickGrid.INDESTRUCTIBLE
+	g.cells[BrickGrid.index(5, 3)] = 1
+	assert(g.remaining() == 1, "깰 수 있는 블럭이 하나인데 %d 로 세어진다" % g.remaining())
+	g.hit(5, 3)
+	assert(g.remaining() == 0, "불괴 블럭이 남아 클리어를 막는다: %d" % g.remaining())
+
+# 안 깨질 뿐이지 공은 정상적으로 튕겨야 한다.
+func _test_indestructible_still_bounces() -> void:
+	var g := BrickGrid.new()
+	g.cells[BrickGrid.index(5, 0)] = BrickGrid.INDESTRUCTIBLE
+	var r := BrickGrid.cell_rect(5, 0)
+	var center := Vector2(r.position.x + BrickGrid.CELL_W * 0.5,
+		r.position.y - Tuning.BALL_RADIUS * 0.8)
+	var q := g.query(center, Tuning.BALL_RADIUS)
+	assert(q["hit"], "불괴 블럭이 공을 안 튕긴다")
+	assert(q["normal"].is_equal_approx(Vector2(0.0, -1.0)),
+		"불괴 블럭의 아래 면 법선이 틀렸다: %s" % q["normal"])
