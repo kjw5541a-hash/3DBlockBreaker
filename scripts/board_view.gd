@@ -92,7 +92,6 @@ func refresh_bricks(grid: BrickGrid) -> void:
 				# 지우고 다시 만드는 것은 종류가 바뀌면 두께도 따라와야 해서다.
 				# 60 개짜리 격자에서 재생성은 부담이 아니다.
 				(_bricks[i] as Node).free()
-				_bricks.erase(i)
 			var m := _make_brick(col, row, kind)
 			_bricks[i] = m
 			_brick_kinds[i] = kind
