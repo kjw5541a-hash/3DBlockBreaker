@@ -12,6 +12,9 @@ var lives: int = Tuning.LIVES
 var paddle_hits_since_brick: int = 0
 # 공이 살아 있던 누적 시간. 잘 맞은 공의 상한이 이 값으로 오른다.
 var elapsed: float = 0.0
+# 지금 몇 판인지. 0 기반이다 — HUD 만 +1 해서 보여준다. 시드가 이 값이라
+# 이 숫자 하나가 배치 전체를 결정한다.
+var stage_index: int = 0
 # 직전 서브스텝에 상처를 준 칸. 정지에 가까운 공은 블럭 위에 얹힌 채 매
 # 프레임 다시 파고들고, 그때마다 hit() 을 부르면 3히트 블럭이 0.05초에
 # 죽는다. 같은 칸을 연속으로 두 번 깎지 않는다 — 공이 한 번이라도 떨어지면
@@ -20,8 +23,7 @@ var elapsed: float = 0.0
 var _last_damaged: int = -1
 
 func _init() -> void:
-	grid = BrickGrid.new()
-	grid.fill_all(1)
+	grid = StageGen.stage(stage_index)
 	paddle = PaddleState.new(0.0)
 	_attach()
 
@@ -123,3 +125,19 @@ func _touches_paddle() -> bool:
 		clampf(ball_pos.x, r.position.x, r.position.x + r.size.x),
 		clampf(ball_pos.y, r.position.y, r.position.y + r.size.y))
 	return ball_pos.distance_to(nearest) < Tuning.BALL_RADIUS
+
+# 클리어. elapsed 는 일부러 안 건드린다 — 속도 램프는 판을 가로질러 이어져야
+# 난이도가 누적된다. 공을 다시 붙이는 것은 새 판 블럭 한가운데에 공이 박힌
+# 채로 시작하는 것을 막으려는 것이다.
+func next_stage() -> void:
+	stage_index += 1
+	grid = StageGen.stage(stage_index)
+	_attach()
+
+# 전멸. 여기서만 램프가 0 으로 돌아간다.
+func reset_run() -> void:
+	lives = Tuning.LIVES
+	elapsed = 0.0
+	stage_index = 0
+	grid = StageGen.stage(stage_index)
+	_attach()

@@ -13,6 +13,8 @@ func _initialize() -> void:
 	_test_hard_brick_only_resets_stall_when_broken()
 	_test_resting_ball_does_not_chip_a_brick_every_frame()
 	_test_broken_list_carries_kind_before_the_destroying_hit()
+	_test_next_stage_advances_without_resetting_the_speed_ramp()
+	_test_reset_run_returns_to_the_first_stage()
 	print("test_play_field: OK")
 	quit()
 
@@ -274,3 +276,32 @@ func _test_resting_ball_does_not_chip_a_brick_every_frame() -> void:
 		f.step(f.paddle.pos, DT)
 	assert(f.grid.get_cell(5, 0) >= 2,
 		"같은 프레임 안에서 같은 칸을 두 번 이상 깎았다: %d" % f.grid.get_cell(5, 0))
+
+# 판이 넘어가도 elapsed 는 이어진다. 판마다 0 으로 되돌리면 램프가 영원히
+# 초반값에 머물러 난이도가 누적되지 않는다 — 100 판을 깨도 첫 판 속도다.
+func _test_next_stage_advances_without_resetting_the_speed_ramp() -> void:
+	var f := PlayField.new()
+	f.elapsed = 42.0
+	var before := f.grid.cells
+	assert(f.stage_index == 0, "새 판이 0 판이 아니다: %d" % f.stage_index)
+	f.next_stage()
+	assert(f.stage_index == 1, "판 번호가 안 올랐다: %d" % f.stage_index)
+	assert(is_equal_approx(f.elapsed, 42.0),
+		"판이 넘어가며 속도 램프가 초기화됐다: %f" % f.elapsed)
+	assert(f.grid.cells != before, "다음 판인데 배치가 그대로다")
+	assert(f.grid.cells == StageGen.stage(1).cells, "1 판의 배치가 아니다")
+	# 새 판 블럭 안에 공이 박힌 채로 시작하면 안 된다.
+	assert(f.attached, "판이 넘어갔는데 공이 안 붙었다")
+
+# 전멸하면 처음부터다. 판 번호가 안 돌아가면 마지막 판을 무한 반복한다.
+func _test_reset_run_returns_to_the_first_stage() -> void:
+	var f := PlayField.new()
+	f.next_stage()
+	f.next_stage()
+	f.lives = 0
+	f.elapsed = 99.0
+	f.reset_run()
+	assert(f.stage_index == 0, "판 번호가 0 으로 안 돌아갔다: %d" % f.stage_index)
+	assert(f.lives == Tuning.LIVES, "목숨이 안 채워졌다: %d" % f.lives)
+	assert(is_equal_approx(f.elapsed, 0.0), "속도 램프가 안 돌아갔다: %f" % f.elapsed)
+	assert(f.grid.cells == StageGen.stage(0).cells, "0 판의 배치가 아니다")

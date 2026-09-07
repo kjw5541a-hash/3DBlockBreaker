@@ -84,8 +84,10 @@ func _test_last_life_restarts() -> void:
 	assert(lost, "공이 데드존까지 안 내려갔다")
 	assert(g.field.lives == Tuning.LIVES,
 		"마지막 목숨을 잃었는데 목숨이 안 돌아왔다: %d" % g.field.lives)
-	assert(g.field.grid.remaining() == Tuning.BRICK_COLS * Tuning.BRICK_ROWS,
-		"재시작인데 블럭이 안 채워졌다: %d" % g.field.grid.remaining())
+	assert(g.field.grid.cells == StageGen.stage(0).cells,
+		"재시작인데 0 판 배치가 아니다: 남은 블럭 %d" % g.field.grid.remaining())
+	assert(g.field.stage_index == 0,
+		"재시작인데 판 번호가 안 돌아갔다: %d" % g.field.stage_index)
 	assert(g.lives_label.text == "목숨 %d" % Tuning.LIVES,
 		"HUD 가 0 목숨을 그대로 보여준다: %s" % g.lives_label.text)
 	g.free()

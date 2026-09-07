@@ -36,19 +36,18 @@ func step_once(delta: float) -> void:
 	_sync_stall()
 	if bool(r["lost"]):
 		_trail.reset()
-		# 마지막 목숨을 잃으면 처음부터 다시 — 1단계에는 게임오버 화면이 없다.
+		# 마지막 목숨을 잃으면 처음부터 다시 — 아직 게임오버 화면이 없다.
 		if field.lives <= 0:
-			field.lives = Tuning.LIVES
-			field.elapsed = 0.0
-			field.grid.fill_all(1)
+			field.reset_run()
 			board.build(field.grid)
 	if not field.attached:
 		_trail.push(field.ball_pos, field.ball_vel.length())
+	if bool(r["cleared"]):
+		field.next_stage()
+		_trail.reset()
+		board.build(field.grid)
 	if bool(r["lost"]) or bool(r["cleared"]):
 		_update_hud()
-	if bool(r["cleared"]):
-		field.grid.fill_all(1)
-		board.build(field.grid)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventScreenDrag:
