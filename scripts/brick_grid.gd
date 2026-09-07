@@ -11,6 +11,11 @@ const CELL_H := (Tuning.BRICK_TOP_V - Tuning.BRICK_BOTTOM_V) / float(Tuning.BRIC
 # 그냥 뺄셈 하나로 끝나기 때문이다.
 const INDESTRUCTIBLE := -1
 
+# 단단 블럭의 최대 히트 수. 생성기가 2~MAX_HARD 사이에서 고르고, 렌더링이
+# 색을 이 범위로 정규화한다. 두 곳이 각자 3 을 박아 두면 한쪽만 올렸을 때
+# 4히트 블럭이 색 없이 나온다.
+const MAX_HARD := 3
+
 var cells: PackedInt32Array = PackedInt32Array()
 
 func _init() -> void:
