@@ -11,6 +11,7 @@ func _run() -> void:
 	_test_scene_loads_and_runs()
 	_test_life_loss_clears_trail()
 	_test_last_life_restarts()
+	_test_clear_and_run_over_in_one_frame_keeps_stage_zero()
 	_test_stall_dots_show_remaining_budget()
 	_test_stall_dots_follow_the_counter()
 	await _test_screen_point_maps_to_board()
@@ -90,6 +91,43 @@ func _test_last_life_restarts() -> void:
 		"재시작인데 판 번호가 안 돌아갔다: %d" % g.field.stage_index)
 	assert(g.lives_label.text == "목숨 %d" % Tuning.LIVES,
 		"HUD 가 0 목숨을 그대로 보여준다: %s" % g.lives_label.text)
+	g.free()
+
+# step() 은 한 프레임에 lost 와 cleared 를 함께 낼 수 있다 — 서브스텝 루프가 lost 로
+# 빠져나와도 remaining() 검사는 그대로 돌기 때문이다. 그때 전멸 복구가 되돌린 판을
+# 같은 프레임의 클리어가 덮어쓰면, 플레이어는 0 판이 아니라 1 판에서 다시 시작한다.
+func _test_clear_and_run_over_in_one_frame_keeps_stage_zero() -> void:
+	var packed := load("res://scenes/game.tscn") as PackedScene
+	var g := packed.instantiate()
+	root.add_child(g)
+	g._ready()
+	g.field.stage_index = 4
+	g.field.lives = 1
+	# 빈 격자 + 데드존 아래의 공. 이 한 프레임이 lost 와 cleared 를 동시에 낸다.
+	g.field.grid.fill_all(0)
+	g.field.attached = false
+	g.field.ball_pos = Vector2(0.0, -0.5)
+	g.field.ball_vel = Vector2(0.0, -1.0)
+	# g 의 정적 타입이 Node 라 g.field 는 Variant 로 잡힌다 — := 추론이 안 먹어
+	# 타입을 명시한다(위 screen_to_board 테스트와 같은 이유).
+	var r: Dictionary = g.field.step(g.field.paddle.pos, 1.0 / 120.0)
+	assert(bool(r["lost"]) and bool(r["cleared"]),
+		"이 테스트의 전제가 깨졌다 — 한 프레임에 두 깃발이 같이 안 섰다: %s" % r)
+
+	# 전제를 확인했으니 같은 상황을 step_once() 로 다시 태운다.
+	g.field.stage_index = 4
+	g.field.lives = 1
+	g.field.grid.fill_all(0)
+	g.field.attached = false
+	g.field.ball_pos = Vector2(0.0, -0.5)
+	g.field.ball_vel = Vector2(0.0, -1.0)
+	g.step_once(1.0 / 120.0)
+	assert(g.field.stage_index == 0,
+		"전멸로 되돌린 판을 같은 프레임의 클리어가 덮어썼다: %d" % g.field.stage_index)
+	assert(g.field.lives == Tuning.LIVES,
+		"전멸 복구가 안 됐다: %d" % g.field.lives)
+	assert(g.field.grid.cells == StageGen.stage(0).cells,
+		"되돌린 뒤 배치가 0 판이 아니다")
 	g.free()
 
 func _test_screen_point_maps_to_board() -> void:

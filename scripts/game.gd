@@ -34,15 +34,21 @@ func step_once(delta: float) -> void:
 	var r := field.step(_target, delta)
 	board.sync(field)
 	_sync_stall()
+	# 클리어와 전멸이 같은 프레임에 함께 나올 수 있다. step() 의 서브스텝 루프가
+	# out["lost"] 를 세우고 빠져나온 뒤에도 remaining() 검사는 그대로 돌기 때문이다.
+	# 그러면 reset_run() 이 0 판으로 되돌린 직후 next_stage() 가 1 판으로 올려 버린다 —
+	# 되돌린 프레임의 클리어는 이미 사라진 판의 것이므로 무시한다.
+	var restarted := false
 	if bool(r["lost"]):
 		_trail.reset()
 		# 마지막 목숨을 잃으면 처음부터 다시 — 아직 게임오버 화면이 없다.
 		if field.lives <= 0:
 			field.reset_run()
 			board.build(field.grid)
+			restarted = true
 	if not field.attached:
 		_trail.push(field.ball_pos, field.ball_vel.length())
-	if bool(r["cleared"]):
+	if bool(r["cleared"]) and not restarted:
 		field.next_stage()
 		_trail.reset()
 		board.build(field.grid)

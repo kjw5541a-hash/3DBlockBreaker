@@ -308,8 +308,14 @@ func _test_reset_run_returns_to_the_first_stage() -> void:
 	f.next_stage()
 	f.lives = 0
 	f.elapsed = 99.0
+	f.attached = false
+	f.ball_pos = Vector2(0.0, Tuning.BRICK_BOTTOM_V + 1.0)
+	f.ball_vel = Vector2(3.0, 7.0)
 	f.reset_run()
 	assert(f.stage_index == 0, "판 번호가 0 으로 안 돌아갔다: %d" % f.stage_index)
 	assert(f.lives == Tuning.LIVES, "목숨이 안 채워졌다: %d" % f.lives)
 	assert(is_equal_approx(f.elapsed, 0.0), "속도 램프가 안 돌아갔다: %f" % f.elapsed)
 	assert(f.grid.cells == StageGen.stage(0).cells, "0 판의 배치가 아니다")
+	assert(f.attached, "처음부터 다시인데 공이 안 붙었다")
+	assert(f.ball_vel == Vector2.ZERO,
+		"처음부터 다시인데 공이 이전 속도를 들고 있다: %s" % f.ball_vel)
