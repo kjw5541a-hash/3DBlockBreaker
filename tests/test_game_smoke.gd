@@ -14,6 +14,7 @@ func _run() -> void:
 	_test_clear_and_run_over_in_one_frame_keeps_stage_zero()
 	_test_stall_dots_show_remaining_budget()
 	_test_stall_dots_follow_the_counter()
+	_test_stage_label_follows_the_stage_index()
 	await _test_screen_point_maps_to_board()
 	await _test_board_fits_in_camera()
 	print("test_game_smoke: OK")
@@ -248,4 +249,26 @@ func _test_stall_dots_follow_the_counter() -> void:
 	g.step_once(1.0 / 120.0)
 	assert(g.stall_label.text == g.stall_text(0),
 		"카운터가 리셋됐는데 라벨이 안 돌아왔다: %s" % g.stall_label.text)
+	g.free()
+
+# 판 번호가 안 보이면 절차 생성이 진행되고 있다는 유일한 단서가 없다.
+# 배치가 매번 달라 보이는 것만으로는 "다음 판"인지 "같은 판 다시"인지
+# 구별할 수 없다.
+func _test_stage_label_follows_the_stage_index() -> void:
+	var packed := load("res://scenes/game.tscn") as PackedScene
+	var g := packed.instantiate()
+	root.add_child(g)
+	g._ready()
+	assert(g.stage_label.text == "판 1",
+		"첫 판 표시가 틀렸다: %s" % g.stage_label.text)
+	# 판을 깼다고 치고 HUD 갱신 경로를 그대로 태운다.
+	g.field.next_stage()
+	g.board.build(g.field.grid)
+	g._update_hud()
+	assert(g.stage_label.text == "판 2",
+		"판이 넘어갔는데 표시가 안 따라왔다: %s" % g.stage_label.text)
+	g.field.reset_run()
+	g._update_hud()
+	assert(g.stage_label.text == "판 1",
+		"처음부터 다시인데 판 번호가 안 돌아왔다: %s" % g.stage_label.text)
 	g.free()

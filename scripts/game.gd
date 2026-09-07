@@ -5,6 +5,7 @@ extends Node3D
 @onready var lives_label: Label = $HUD/Lives
 @onready var version_label: Label = $HUD/Version
 @onready var stall_label: Label = $HUD/Stall
+@onready var stage_label: Label = $HUD/Stage
 
 var field: PlayField
 # 손가락이 닿기 전에는 패들을 제자리에 둔다.
@@ -81,6 +82,8 @@ func screen_to_board(screen: Vector2) -> Vector2:
 
 func _update_hud() -> void:
 	lives_label.text = "목숨 %d" % field.lives
+	# stage_index 는 0 기반이다. 플레이어에게 "0 판"을 보여줄 이유는 없다.
+	stage_label.text = "판 %d" % (field.stage_index + 1)
 
 # 남은 점이 곧 남은 예산이다. 이 카운터는 안 보이면 억울하다 — 단단 블럭을 두 번
 # 치고 불괴 블럭을 한 번 스치면 경고 없이 목숨이 날아가는데, 그게 규칙 때문인지
