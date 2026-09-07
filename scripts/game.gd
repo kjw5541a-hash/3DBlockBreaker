@@ -5,6 +5,7 @@ extends Node3D
 @onready var lives_label: Label = $HUD/Lives
 @onready var version_label: Label = $HUD/Version
 @onready var stall_label: Label = $HUD/Stall
+@onready var stage_label: Label = $HUD/Stage
 
 var field: PlayField
 # 손가락이 닿기 전에는 패들을 제자리에 둔다.
@@ -34,21 +35,30 @@ func step_once(delta: float) -> void:
 	var r := field.step(_target, delta)
 	board.sync(field)
 	_sync_stall()
+	# step() 은 구조적으로 lost 와 cleared 를 한 dict 에 함께 담을 수 있다 — 서브스텝
+	# 루프가 out["lost"] 를 세우고 빠져나와도 remaining() 검사는 그대로 돌기 때문이다.
+	# 그러면 reset_run() 이 0 판으로 되돌린 직후 next_stage() 가 1 판으로 올려 버린다.
+	#
+	# 지금 물리로는 그 조합이 안 나온다: 공이 한 프레임에 블럭 띠에서 데드존까지 못 가고,
+	# 블럭을 깨면 교착 카운터가 0 이 된다. 그래도 가드를 두는 것은 아이템 D(공 분열)가
+	# "목숨은 마지막 공이 사라질 때 깎인다"로 바꾸는 순간 열리기 때문이다 — 그때 이 버그는
+	# 생성기 결함으로 오진되기 딱 좋다. 되돌린 프레임의 클리어는 이미 사라진 판의 것이다.
+	var restarted := false
 	if bool(r["lost"]):
 		_trail.reset()
-		# 마지막 목숨을 잃으면 처음부터 다시 — 1단계에는 게임오버 화면이 없다.
+		# 마지막 목숨을 잃으면 처음부터 다시 — 아직 게임오버 화면이 없다.
 		if field.lives <= 0:
-			field.lives = Tuning.LIVES
-			field.elapsed = 0.0
-			field.grid.fill_all(1)
+			field.reset_run()
 			board.build(field.grid)
+			restarted = true
 	if not field.attached:
 		_trail.push(field.ball_pos, field.ball_vel.length())
+	if bool(r["cleared"]) and not restarted:
+		field.next_stage()
+		_trail.reset()
+		board.build(field.grid)
 	if bool(r["lost"]) or bool(r["cleared"]):
 		_update_hud()
-	if bool(r["cleared"]):
-		field.grid.fill_all(1)
-		board.build(field.grid)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventScreenDrag:
@@ -76,6 +86,8 @@ func screen_to_board(screen: Vector2) -> Vector2:
 
 func _update_hud() -> void:
 	lives_label.text = "목숨 %d" % field.lives
+	# stage_index 는 0 기반이다. 플레이어에게 "0 판"을 보여줄 이유는 없다.
+	stage_label.text = "판 %d" % (field.stage_index + 1)
 
 # 남은 점이 곧 남은 예산이다. 이 카운터는 안 보이면 억울하다 — 단단 블럭을 두 번
 # 치고 불괴 블럭을 한 번 스치면 경고 없이 목숨이 날아가는데, 그게 규칙 때문인지
