@@ -35,10 +35,14 @@ func step_once(delta: float) -> void:
 	var r := field.step(_target, delta)
 	board.sync(field)
 	_sync_stall()
-	# 클리어와 전멸이 같은 프레임에 함께 나올 수 있다. step() 의 서브스텝 루프가
-	# out["lost"] 를 세우고 빠져나온 뒤에도 remaining() 검사는 그대로 돌기 때문이다.
-	# 그러면 reset_run() 이 0 판으로 되돌린 직후 next_stage() 가 1 판으로 올려 버린다 —
-	# 되돌린 프레임의 클리어는 이미 사라진 판의 것이므로 무시한다.
+	# step() 은 구조적으로 lost 와 cleared 를 한 dict 에 함께 담을 수 있다 — 서브스텝
+	# 루프가 out["lost"] 를 세우고 빠져나와도 remaining() 검사는 그대로 돌기 때문이다.
+	# 그러면 reset_run() 이 0 판으로 되돌린 직후 next_stage() 가 1 판으로 올려 버린다.
+	#
+	# 지금 물리로는 그 조합이 안 나온다: 공이 한 프레임에 블럭 띠에서 데드존까지 못 가고,
+	# 블럭을 깨면 교착 카운터가 0 이 된다. 그래도 가드를 두는 것은 아이템 D(공 분열)가
+	# "목숨은 마지막 공이 사라질 때 깎인다"로 바꾸는 순간 열리기 때문이다 — 그때 이 버그는
+	# 생성기 결함으로 오진되기 딱 좋다. 되돌린 프레임의 클리어는 이미 사라진 판의 것이다.
 	var restarted := false
 	if bool(r["lost"]):
 		_trail.reset()

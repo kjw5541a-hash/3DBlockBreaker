@@ -45,6 +45,11 @@ func _test_invariants_hold_for_first_hundred_stages() -> void:
 				hard_walls += 1
 		assert(hard_walls <= StageGen.INDESTRUCTIBLE_MAX,
 			"판 %d 의 불괴 블럭이 상한을 넘었다: %d" % [index, hard_walls])
+		# 상한만 보면 0 개도 통과한다. 곡선이 약속한 수가 실제로 놓였는지 본다 —
+		# 이 단언이 없으면 _place_indestructible 이 통째로 무동작이어도 초록불이다.
+		assert(hard_walls == StageGen.indestructible_count(index),
+			"판 %d 에 놓인 불괴 수가 곡선과 다르다: %d vs %d" % [
+				index, hard_walls, StageGen.indestructible_count(index)])
 
 # 레버 D. 빈칸이 좁아지지 않으면 밀도만 오르다가 어느 판부터 그냥 벽이 된다.
 func _test_no_gap_is_wider_than_the_curve_allows() -> void:
@@ -73,11 +78,14 @@ func _test_levers_arrive_on_schedule() -> void:
 	for index in 3:
 		var g := StageGen.stage(index)
 		for c in g.cells:
-			assert(c <= 1, "판 %d(1~3판)에 단단 블럭이 나왔다: %d" % [index, c])
+			assert(c == 0 or c == 1, "판 %d(1~3판)에 단단 블럭이 나왔다: %d" % [index, c])
 	assert(StageGen.hard_ratio(2) == 0.0, "판 3 에 단단 비율이 0 이 아니다")
 	assert(StageGen.hard_ratio(50) > StageGen.hard_ratio(4),
 		"단단 비율이 안 오른다")
 
+	# 상한을 상수 자신과 비교하면 상수를 올려도 초록불이다. 설계 문서의 숫자를 못박는다.
+	assert(StageGen.INDESTRUCTIBLE_MAX == 8,
+		"설계가 정한 불괴 상한 8 이 바뀌었다: %d" % StageGen.INDESTRUCTIBLE_MAX)
 	assert(StageGen.indestructible_count(6) == 0, "판 7 에 불괴 블럭이 나온다")
 	assert(StageGen.indestructible_count(50) == StageGen.INDESTRUCTIBLE_MAX,
 		"불괴 블럭이 상한에 안 닿는다: %d" % StageGen.indestructible_count(50))

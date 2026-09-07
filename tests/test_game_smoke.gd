@@ -12,6 +12,7 @@ func _run() -> void:
 	_test_life_loss_clears_trail()
 	_test_last_life_restarts()
 	_test_clear_and_run_over_in_one_frame_keeps_stage_zero()
+	_test_clearing_a_stage_advances_the_board_and_hud()
 	_test_stall_dots_show_remaining_budget()
 	_test_stall_dots_follow_the_counter()
 	_test_stage_label_follows_the_stage_index()
@@ -129,6 +130,28 @@ func _test_clear_and_run_over_in_one_frame_keeps_stage_zero() -> void:
 		"전멸 복구가 안 됐다: %d" % g.field.lives)
 	assert(g.field.grid.cells == StageGen.stage(0).cells,
 		"되돌린 뒤 배치가 0 판이 아니다")
+	g.free()
+
+# 클리어 분기 전체가 game.gd 에서 사라져도 지금은 아무 테스트도 안 터진다.
+# PlayField.next_stage() 는 단위로만 검사되고, 스모크는 lost+cleared 가드만 탄다.
+func _test_clearing_a_stage_advances_the_board_and_hud() -> void:
+	var packed := load("res://scenes/game.tscn") as PackedScene
+	var g := packed.instantiate()
+	root.add_child(g)
+	g._ready()
+	# 데드존에서 먼 곳에서 마지막 블럭이 사라진 상황.
+	g.field.grid.fill_all(0)
+	g.field.attached = false
+	g.field.ball_pos = Vector2(0.0, 5.0)
+	g.field.ball_vel = Vector2(0.0, 4.0)
+	g.step_once(1.0 / 120.0)
+	assert(g.field.stage_index == 1,
+		"클리어했는데 판이 안 넘어갔다: %d" % g.field.stage_index)
+	assert(g.field.grid.cells == StageGen.stage(1).cells, "1 판 배치가 아니다")
+	assert(g.field.attached, "새 판인데 공이 안 붙었다")
+	assert(g.board.brick_count() > 0, "새 판 블럭이 화면에 안 올라왔다")
+	assert(g.stage_label.text == "판 2",
+		"판이 넘어갔는데 라벨이 안 따라왔다: %s" % g.stage_label.text)
 	g.free()
 
 func _test_screen_point_maps_to_board() -> void:

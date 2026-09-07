@@ -45,9 +45,9 @@ static func brick_color(kind: int, row: int) -> Color:
 	if kind == BrickGrid.INDESTRUCTIBLE:
 		return Color(0.85, 0.72, 0.25)
 	if kind >= 2:
-		# kind 3 -> 1.0, kind 2 -> 0.5. Color 에 float 을 곱하면 알파까지
+		# kind MAX_HARD -> 1.0, kind 2 -> 0.5. Color 에 float 을 곱하면 알파까지
 		# 같이 어두워지므로 성분별로 곱한다.
-		var t := float(kind - 1) / 2.0
+		var t := float(kind - 1) / float(BrickGrid.MAX_HARD - 1)
 		var k := lerpf(0.6, 1.0, t)
 		return Color(0.55 * k, 0.58 * k, 0.62 * k)
 	return Color.from_hsv(fmod(float(row) * 0.13, 1.0), 0.55, 0.9)
