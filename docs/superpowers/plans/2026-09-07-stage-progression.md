@@ -354,6 +354,7 @@ git commit -m "feat: 판 번호로 배치를 만드는 StageGen"
 - Modify: `scripts/play_field.gd`
 - Modify: `scripts/game.gd:37-51` (`step_once` 의 lost/cleared 처리)
 - Test: `tests/test_play_field.gd`
+- Test: `tests/test_game_smoke.gd` (재시작 단언이 `fill_all(1)` 전제를 깔고 있다)
 
 **Interfaces:**
 - Consumes: Task 1 의 `StageGen.stage(index: int) -> BrickGrid`
@@ -496,13 +497,40 @@ func reset_run() -> void:
 
 `_update_hud()` 를 뒤로 옮긴 것은 순서 때문이다. 판 번호를 갱신하려면 `next_stage()` 가 먼저 돌아야 한다. 클리어에서도 `_trail.reset()` 을 부르는 것은 공이 다시 붙기 때문이다 — 안 지우면 이전 판에서 죽은 자리의 리본이 새 판 첫 발사에 이어진다.
 
-- [ ] **Step 5: 통과를 확인한다**
+- [ ] **Step 5: 깨진 기존 단언을 고친다**
+
+`tests/test_game_smoke.gd` 의 `_test_last_life_restarts()` 는 재시작 후 격자가
+**꽉 찼다**고 단언한다. 전멸 복구가 `fill_all(1)` 이던 시절의 단언이고, 이제
+0 판은 밀도 55% 라 60 이 아니다. 이 줄을
+
+```gdscript
+	assert(g.field.grid.remaining() == Tuning.BRICK_COLS * Tuning.BRICK_ROWS,
+		"재시작인데 블럭이 안 채워졌다: %d" % g.field.grid.remaining())
+```
+
+이렇게 바꾼다.
+
+```gdscript
+	assert(g.field.grid.cells == StageGen.stage(0).cells,
+		"재시작인데 0 판 배치가 아니다: 남은 블럭 %d" % g.field.grid.remaining())
+	assert(g.field.stage_index == 0,
+		"재시작인데 판 번호가 안 돌아갔다: %d" % g.field.stage_index)
+```
+
+숫자 60 을 다른 숫자로 바꾸는 게 아니라 **배치 자체를 비교하도록** 바꾸는 것이
+핵심이다. "블럭이 좀 있다"는 단언은 `reset_run()` 이 엉뚱한 판을 만들어도
+통과한다.
+
+- [ ] **Step 6: 통과를 확인한다**
 
 Run: `./run_tests.sh`
 
-Expected: `전체 통과`. 특히 `test_game_smoke.gd` 의 `_test_last_life_restarts()` 가 여전히 통과해야 한다 — 전멸 복구 경로를 `reset_run()` 으로 갈아끼운 자리다.
+Expected: `전체 통과`. 10개 파일 전부다. `test_play_field.gd` 의
+`_test_hard_brick_only_resets_stall_when_broken()` 은 기본 격자를 쓰지만 칸
+(5,0)을 직접 덮어쓰므로 영향이 없어야 한다 — 만약 깨지면 그 자리에서 멈추고
+왜 깨졌는지 보고할 것. 조용히 단언을 느슨하게 만들지 말 것.
 
-- [ ] **Step 6: 변이 테스트**
+- [ ] **Step 7: 변이 테스트**
 
 1. `next_stage()` 에서 `_attach()` 를 지운다.
    Expected: `판이 넘어갔는데 공이 안 붙었다`
@@ -513,10 +541,10 @@ Expected: `전체 통과`. 특히 `test_game_smoke.gd` 의 `_test_last_life_rest
 
 원복하고 `./run_tests.sh` 로 `전체 통과` 를 다시 본다.
 
-- [ ] **Step 7: 커밋**
+- [ ] **Step 8: 커밋**
 
 ```bash
-git add scripts/play_field.gd scripts/game.gd tests/test_play_field.gd
+git add scripts/play_field.gd scripts/game.gd tests/test_play_field.gd tests/test_game_smoke.gd
 git commit -m "feat: 클리어하면 다음 판으로 넘어간다"
 ```
 
