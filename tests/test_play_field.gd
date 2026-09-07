@@ -284,6 +284,12 @@ func _test_next_stage_advances_without_resetting_the_speed_ramp() -> void:
 	f.elapsed = 42.0
 	var before := f.grid.cells
 	assert(f.stage_index == 0, "새 판이 0 판이 아니다: %d" % f.stage_index)
+	# 공을 블럭 띠 한가운데로 날려 보낸다. 새 판이 이 상태를 그대로 물려받으면
+	# 공이 블럭 안에 박힌 채 시작한다 — next_stage() 가 _attach() 를 부르는 이유가
+	# 그것이고, 띄워 두지 않으면 아래 단언이 자명 참이 되어 아무것도 검사하지 않는다.
+	f.attached = false
+	f.ball_pos = Vector2(0.0, Tuning.BRICK_BOTTOM_V + 1.0)
+	f.ball_vel = Vector2(3.0, 7.0)
 	f.next_stage()
 	assert(f.stage_index == 1, "판 번호가 안 올랐다: %d" % f.stage_index)
 	assert(is_equal_approx(f.elapsed, 42.0),
@@ -292,6 +298,8 @@ func _test_next_stage_advances_without_resetting_the_speed_ramp() -> void:
 	assert(f.grid.cells == StageGen.stage(1).cells, "1 판의 배치가 아니다")
 	# 새 판 블럭 안에 공이 박힌 채로 시작하면 안 된다.
 	assert(f.attached, "판이 넘어갔는데 공이 안 붙었다")
+	assert(f.ball_vel == Vector2.ZERO,
+		"판이 넘어갔는데 공이 이전 판의 속도를 그대로 들고 있다: %s" % f.ball_vel)
 
 # 전멸하면 처음부터다. 판 번호가 안 돌아가면 마지막 판을 무한 반복한다.
 func _test_reset_run_returns_to_the_first_stage() -> void:
