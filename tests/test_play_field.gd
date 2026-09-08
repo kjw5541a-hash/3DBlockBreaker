@@ -18,6 +18,11 @@ func _initialize() -> void:
 	_test_losing_a_life_drops_a_fresh_ball_onto_the_paddle()
 	_test_dropping_ball_tracks_the_paddle_sideways()
 	_test_wall_bounce_is_reported()
+	_test_marked_brick_drops_an_item_once()
+	_test_item_falls_at_a_constant_speed()
+	_test_paddle_catches_an_item_and_gains_a_life()
+	_test_missed_item_disappears_without_costing_a_life()
+	_test_items_keep_falling_while_the_ball_is_attached()
 	print("test_play_field: OK")
 	quit()
 
@@ -392,3 +397,115 @@ func _test_wall_bounce_is_reported() -> void:
 			hit = true
 			break
 	assert(hit, "옆벽에 닿았는데 wall_hit 이 안 켜졌다")
+
+# 아이템은 표시된 블럭이 깨지는 순간에만 떨어져야 한다. 단단 블럭이 맞을
+# 때마다 떨어지면 한 칸에서 셋이 쏟아진다.
+func _test_marked_brick_drops_an_item_once() -> void:
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	# 단단 블럭 하나에 아이템을 실어 둔다. 두 번 맞아야 깨지는 칸이라
+	# "맞을 때마다"와 "깨질 때만"이 구별된다.
+	f.grid.cells[BrickGrid.index(5, 0)] = 2
+	f.grid.item_cells[BrickGrid.index(5, 0)] = Item.P
+	var rect := BrickGrid.cell_rect(5, 0)
+	var center := rect.position + rect.size * 0.5
+	f.attached = false
+	# 첫 히트. 칸 바로 아래에서 위로 쏴 한 대 때린다.
+	# 블럭과 안 겹치는 자리에서 쏜다. 겹친 채로 시작하면 _last_damaged
+	# 디바운스에 걸려 깎지 않고 튕기기만 한다.
+	f.ball_pos = Vector2(center.x, rect.position.y - Tuning.BALL_RADIUS - 0.1)
+	f.ball_vel = Vector2(0.0, 8.0)
+	var first_hit := false
+	for i in 20:
+		var r := f.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), DT)
+		if int(r["bricks_hit"]) > 0 or f.grid.get_cell(5, 0) != 2:
+			first_hit = true
+			break
+	assert(first_hit, "첫 히트가 안 났다 — 테스트가 헛돈다")
+	assert(f.grid.get_cell(5, 0) == 1, "단단 블럭이 한 대에 깨졌다: %d" % f.grid.get_cell(5, 0))
+	assert(f.items.is_empty(), "아직 안 깨졌는데 아이템이 떨어졌다: %d" % f.items.size())
+
+	# 두 번째 히트로 깬다.
+	# 블럭과 안 겹치는 자리에서 쏜다. 겹친 채로 시작하면 _last_damaged
+	# 디바운스에 걸려 깎지 않고 튕기기만 한다.
+	f.ball_pos = Vector2(center.x, rect.position.y - Tuning.BALL_RADIUS - 0.1)
+	f.ball_vel = Vector2(0.0, 8.0)
+	var broke := false
+	for i in 20:
+		var r := f.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), DT)
+		if (r["broken"] as Array).size() > 0:
+			broke = true
+			break
+	assert(broke, "두 번째 히트로도 안 깨졌다")
+	assert(f.items.size() == 1, "깨졌는데 아이템이 하나가 아니다: %d" % f.items.size())
+	assert(int(f.items[0]["kind"]) == Item.P, "떨어진 종류가 P 가 아니다")
+	assert(f.grid.item_cells[BrickGrid.index(5, 0)] == Item.NONE,
+		"떨어뜨린 뒤에도 칸에 아이템이 남아 있다")
+
+# 등속이어야 한다. 중력으로 가속하면 잡을 수 있는지를 순간 판단할 수 없다.
+func _test_item_falls_at_a_constant_speed() -> void:
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	f.items.append({"pos": Vector2(2.5, 8.0), "kind": Item.P})
+	var start: float = (f.items[0]["pos"] as Vector2).y
+	for i in 60:
+		f.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), DT)
+	var dropped: float = start - (f.items[0]["pos"] as Vector2).y
+	var expected := Tuning.ITEM_FALL_SPEED * 60.0 * DT
+	assert(is_equal_approx(dropped, expected),
+		"등속이 아니다 — 0.5초에 %f 내려왔다 (기대 %f)" % [dropped, expected])
+	assert(is_equal_approx((f.items[0]["pos"] as Vector2).x, 2.5),
+		"아이템이 옆으로 흘렀다: %f" % (f.items[0]["pos"] as Vector2).x)
+
+func _test_paddle_catches_an_item_and_gains_a_life() -> void:
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	var before := f.lives
+	# 패들 바로 위에 놓고 패들을 그 x 로 보낸다.
+	f.items.append({"pos": Vector2(0.0, Tuning.PADDLE_BAND_MIN_V + 0.6), "kind": Item.P})
+	var taken := false
+	for i in 60:
+		var r := f.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), DT)
+		if (r["items_taken"] as Array).size() > 0:
+			assert(int((r["items_taken"] as Array)[0]) == Item.P, "받은 종류가 P 가 아니다")
+			taken = true
+			break
+	assert(taken, "패들 바로 위로 떨어뜨렸는데 못 받았다")
+	assert(f.lives == before + 1, "P 를 받았는데 목숨이 안 늘었다: %d -> %d" % [before, f.lives])
+	assert(f.items.is_empty(), "받은 아이템이 목록에 남아 있다")
+
+# 놓친 것을 벌하면 아이템이 보상이 아니라 위험이 된다.
+func _test_missed_item_disappears_without_costing_a_life() -> void:
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	var before := f.lives
+	# 패들에서 먼 x. 패들은 반대쪽 끝에 세워 둔다.
+	f.items.append({"pos": Vector2(2.8, 3.0), "kind": Item.P})
+	for i in 240:
+		var r := f.step(Vector2(-2.8, Tuning.PADDLE_BAND_MIN_V), DT)
+		assert((r["items_taken"] as Array).is_empty(), "안 닿았는데 받았다")
+		if f.items.is_empty():
+			break
+	assert(f.items.is_empty(), "판 아래로 지나간 아이템이 안 사라졌다")
+	assert(f.lives == before, "아이템을 놓쳤는데 목숨이 깎였다: %d -> %d" % [before, f.lives])
+
+# 공이 붙어 있거나 낙하 중일 때 step() 은 조기 반환한다. 아이템 갱신이 그
+# 뒤에 있으면 공을 놓친 순간 화면의 아이템이 공중에 얼어붙는다.
+func _test_items_keep_falling_while_the_ball_is_attached() -> void:
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	assert(f.attached, "새 PlayField 의 공이 안 붙어 있다 — 테스트가 헛돈다")
+	f.items.append({"pos": Vector2(2.5, 8.0), "kind": Item.P})
+	var start: float = (f.items[0]["pos"] as Vector2).y
+	for i in 30:
+		f.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), DT)
+	assert((f.items[0]["pos"] as Vector2).y < start,
+		"공이 붙어 있는 동안 아이템이 안 내려왔다")
+
+	# 낙하 중(dropping)에도 마찬가지다.
+	f._spawn_dropping()
+	var mid: float = (f.items[0]["pos"] as Vector2).y
+	for i in 30:
+		f.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), DT)
+	assert((f.items[0]["pos"] as Vector2).y < mid,
+		"새 공이 낙하하는 동안 아이템이 안 내려왔다")

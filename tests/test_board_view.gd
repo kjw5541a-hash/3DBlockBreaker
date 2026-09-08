@@ -11,6 +11,7 @@ func _initialize() -> void:
 	_test_walls_mark_the_boundary()
 	_test_paddle_break_hides_then_restores_the_paddle()
 	_test_brick_break_spawns_fragments()
+	_test_item_meshes_follow_the_field()
 	print("test_board_view: OK")
 	quit()
 
@@ -139,4 +140,28 @@ func _test_brick_break_spawns_fragments() -> void:
 	var before := view.get_child_count()
 	view.play_brick_break(2, 1, 3)
 	assert(view.get_child_count() > before, "블럭이 깨졌는데 조각이 안 생겼다")
+	view.free()
+
+# 아이템이 화면에 안 보이면 떨어지고 있다는 것을 알 방법이 없다. 개수가
+# 줄었을 때 메시가 남으면 유령 아이템이 판에 박힌다.
+func _test_item_meshes_follow_the_field() -> void:
+	var view := BoardView.new()
+	root.add_child(view)
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	view.build(f.grid)
+	assert(view.item_count() == 0, "아이템이 없는데 메시가 있다: %d" % view.item_count())
+
+	f.items.append({"pos": Vector2(1.0, 6.0), "kind": Item.P})
+	f.items.append({"pos": Vector2(-2.0, 4.0), "kind": Item.P})
+	view.sync_items(f)
+	assert(view.item_count() == 2, "아이템 둘인데 메시가 %d 개다" % view.item_count())
+
+	f.items.remove_at(0)
+	view.sync_items(f)
+	assert(view.item_count() == 1, "아이템이 하나로 줄었는데 메시가 %d 개다" % view.item_count())
+
+	f.items.clear()
+	view.sync_items(f)
+	assert(view.item_count() == 0, "아이템이 다 사라졌는데 메시가 %d 개 남았다" % view.item_count())
 	view.free()

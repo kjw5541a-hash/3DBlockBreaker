@@ -10,6 +10,8 @@ var _brick_kinds: Dictionary = {}
 var _ball: MeshInstance3D
 var _paddle: MeshInstance3D
 var _walls: Array[MeshInstance3D] = []
+# 떨어지는 아이템 메시. 판당 3 개뿐이라 개수가 바뀔 때만 만들고 지운다.
+var _items: Array[MeshInstance3D] = []
 
 # 순수 시각값. 물리는 여전히 (u, v) 평면의 선분 하나로 튕긴다. 안쪽 면이
 # 정확히 판 경계에 오도록 바깥으로만 두께를 준다 — 벽이 공을 먹는 것처럼
@@ -174,8 +176,45 @@ func _make_brick_fragment(color: Color, brick_h: float) -> MeshInstance3D:
 	m.material_override = mat
 	return m
 
+func item_count() -> int:
+	return _items.size()
+
+# 아이템과 메시를 인덱스로만 맞춘다.
+#
+# ponytail: 신원을 붙이지 않는다 — 지금은 종류가 P 하나뿐이라 어느 메시가
+# 어느 아이템인지 눈으로 구별되지 않는다. 4b 에서 종류가 늘면 가운데 것을
+# 먹었을 때 남은 둘의 색이 서로 바뀌어 보일 수 있으므로 그때 붙일 것.
+func sync_items(field: PlayField) -> void:
+	while _items.size() < field.items.size():
+		var m := _make_item()
+		_items.append(m)
+		add_child(m)
+	while _items.size() > field.items.size():
+		_items.pop_back().free()
+	for i in field.items.size():
+		var it := field.items[i]
+		_items[i].position = board_to_local(it["pos"] as Vector2, Tuning.ITEM_HALF_SIZE)
+		var color := Item.color(int(it["kind"]))
+		var mat := _items[i].material_override as StandardMaterial3D
+		mat.albedo_color = color
+		# 블럭 사이로 떨어질 때 배경에 묻히지 않게 스스로 빛난다.
+		mat.emission = color * 0.5
+
+func _make_item() -> MeshInstance3D:
+	var h := Tuning.ITEM_HALF_SIZE
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(h * 2.0, h * 0.7, h * 2.0)
+	var m := MeshInstance3D.new()
+	m.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.emission_enabled = true
+	m.material_override = mat
+	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return m
+
 func sync(field: PlayField) -> void:
 	refresh_bricks(field.grid)
+	sync_items(field)
 	_ball.position = board_to_local(field.ball_pos, Tuning.BALL_RADIUS)
 	_paddle.position = board_to_local(field.paddle.pos, Tuning.PADDLE_THICKNESS * 0.5)
 	# 기울기를 눈에 보이게 한다. 법선과 같은 부호 규약을 쓴다.

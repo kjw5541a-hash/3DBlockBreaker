@@ -18,9 +18,16 @@ const MAX_HARD := 3
 
 var cells: PackedInt32Array = PackedInt32Array()
 
+# 아이템이 든 칸. cells 와 정확히 같은 인덱스 규약을 쓰는 병렬 배열이고,
+# 값은 Item 의 종류다(0 은 없음). 딕셔너리로 두면 index() 를 두 군데서
+# 다르게 쓰게 되고, 60칸짜리 격자에서 아낄 메모리도 없다.
+var item_cells: PackedInt32Array = PackedInt32Array()
+
 func _init() -> void:
 	cells.resize(Tuning.BRICK_COLS * Tuning.BRICK_ROWS)
 	cells.fill(0)
+	item_cells.resize(Tuning.BRICK_COLS * Tuning.BRICK_ROWS)
+	item_cells.fill(Item.NONE)
 
 static func index(col: int, row: int) -> int:
 	return row * Tuning.BRICK_COLS + col
@@ -48,6 +55,16 @@ func hit(col: int, row: int) -> void:
 	# 불괴(-1)와 빈칸(0)은 뺄셈 대상이 아니다.
 	if cells[i] > 0:
 		cells[i] -= 1
+
+# 아이템을 꺼내면서 칸을 비운다. 읽기와 지우기가 갈라지면 같은 블럭이 두 번
+# 떨어뜨릴 여지가 생긴다.
+func take_item(col: int, row: int) -> int:
+	if col < 0 or col >= Tuning.BRICK_COLS or row < 0 or row >= Tuning.BRICK_ROWS:
+		return Item.NONE
+	var i := index(col, row)
+	var kind := item_cells[i]
+	item_cells[i] = Item.NONE
+	return kind
 
 # 깰 수 있는 칸만 센다. 불괴는 남아 있어도 클리어를 막지 않는다.
 func remaining() -> int:
