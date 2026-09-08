@@ -97,6 +97,83 @@ func refresh_bricks(grid: BrickGrid) -> void:
 			_brick_kinds[i] = kind
 			add_child(m)
 
+# 목숨을 잃은 자리를 눈에 보이게 한다. 패들을 조각내 흩뿌리고 잠깐
+# 숨겼다가 새 패들처럼 다시 보여준다 — 그동안 PlayField 는 새 공을
+# 패들 위로 떨어뜨리는 중이다(dropping). 물리는 안 건드린다, 순전히
+# 눈요기다.
+#
+# ponytail: bind_node 로 board 수명에 묶지 않는다 — 묶으면 Tween.custom_step
+# 이 진행이 안 돼 테스트에서 결과를 결정적으로 확인할 수 없다. 이 게임은
+# 씬 전환이 없어 board 가 애니메이션 도중(0.35초) 사라질 일이 없으므로
+# 지금은 대가가 없다. 씬 전환이 생기면 그때 다시 볼 것.
+#
+# create_tween() 대신 SceneTree.create_tween() 을 쓴다 — Node.create_tween()
+# 은 노드가 씬 트리에 편입된 뒤에야 정상 진행되는데, 테스트가 root.add_child()
+# 직후(트리 편입이 다음 프레임까지 미뤄진 상태) 곧바로 호출하면 tween 이
+# 전혀 진행되지 않는다. Engine.get_main_loop() 는 트리 편입 여부와 무관하다.
+const _BREAK_DURATION := 0.35
+
+func play_paddle_break() -> Tween:
+	var tree := Engine.get_main_loop() as SceneTree
+	var origin := _paddle.position
+	_paddle.visible = false
+	for i in 6:
+		var frag := _make_paddle_fragment()
+		frag.position = origin
+		add_child(frag)
+		var dir := Vector3(randf_range(-1.0, 1.0), randf_range(0.3, 1.0),
+			randf_range(-1.0, 1.0)).normalized()
+		var frag_tween := tree.create_tween()
+		frag_tween.set_parallel(true)
+		frag_tween.tween_property(frag, "position", origin + dir * 0.8, _BREAK_DURATION)
+		frag_tween.tween_property(frag, "scale", Vector3.ZERO, _BREAK_DURATION)
+		frag_tween.chain().tween_callback(frag.queue_free)
+	var respawn_tween := tree.create_tween()
+	respawn_tween.tween_interval(_BREAK_DURATION)
+	respawn_tween.tween_callback(func(): _paddle.visible = true)
+	return respawn_tween
+
+func _make_paddle_fragment() -> MeshInstance3D:
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(0.18, Tuning.PADDLE_THICKNESS, 0.18)
+	var m := MeshInstance3D.new()
+	m.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.6, 0.85, 1.0)
+	m.material_override = mat
+	return m
+
+# 블럭이 깨진 자리를 눈에 보이게 한다. refresh_bricks() 가 이미 실제
+# 블럭 메시를 지운 뒤이므로, 이건 그 자리에 흩뿌리는 순전한 장식이다.
+# 벽돌 종류의 색과 두께를 그대로 물려받아 무엇이 깨졌는지 알아보게 한다.
+func play_brick_break(col: int, row: int, kind: int) -> void:
+	var tree := Engine.get_main_loop() as SceneTree
+	var rect := BrickGrid.cell_rect(col, row)
+	var h := brick_height(kind)
+	var origin := board_to_local(rect.position + rect.size * 0.5, h * 0.5)
+	var color := brick_color(kind, row)
+	for i in 4:
+		var frag := _make_brick_fragment(color, h)
+		frag.position = origin
+		add_child(frag)
+		var dir := Vector3(randf_range(-1.0, 1.0), randf_range(0.3, 1.0),
+			randf_range(-1.0, 1.0)).normalized()
+		var frag_tween := tree.create_tween()
+		frag_tween.set_parallel(true)
+		frag_tween.tween_property(frag, "position", origin + dir * 0.6, _BREAK_DURATION)
+		frag_tween.tween_property(frag, "scale", Vector3.ZERO, _BREAK_DURATION)
+		frag_tween.chain().tween_callback(frag.queue_free)
+
+func _make_brick_fragment(color: Color, brick_h: float) -> MeshInstance3D:
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(0.16, brick_h * 0.5, 0.16)
+	var m := MeshInstance3D.new()
+	m.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	m.material_override = mat
+	return m
+
 func sync(field: PlayField) -> void:
 	refresh_bricks(field.grid)
 	_ball.position = board_to_local(field.ball_pos, Tuning.BALL_RADIUS)

@@ -5,11 +5,14 @@ extends Node3D
 @onready var lives_label: Label = $HUD/Lives
 @onready var version_label: Label = $HUD/Version
 @onready var stage_label: Label = $HUD/Stage
+@onready var title_screen: Control = $HUD/TitleScreen
 
 var field: PlayField
 # 손가락이 닿기 전에는 패들을 제자리에 둔다.
 var _target: Vector2
 var _trail: BallTrail
+# 타이틀 화면을 넘기기 전에는 물리를 안 돌린다.
+var _started: bool = false
 
 func _ready() -> void:
 	field = PlayField.new()
@@ -23,11 +26,16 @@ func _ready() -> void:
 	board.add_child(_trail)
 
 func _physics_process(delta: float) -> void:
+	if not _started:
+		return
 	step_once(delta)
 
 # 테스트에서도 부를 수 있게 프레임 루프와 분리한다.
 func step_once(delta: float) -> void:
 	var r := field.step(_target, delta)
+	for b in (r["broken"] as Array):
+		var bd := b as Dictionary
+		board.play_brick_break(int(bd["col"]), int(bd["row"]), int(bd["kind"]))
 	board.sync(field)
 	# step() 은 구조적으로 lost 와 cleared 를 한 dict 에 함께 담을 수 있다 — 서브스텝
 	# 루프가 out["lost"] 를 세우고 빠져나와도 remaining() 검사는 그대로 돌기 때문이다.
@@ -40,12 +48,14 @@ func step_once(delta: float) -> void:
 	var restarted := false
 	if bool(r["lost"]):
 		_trail.reset()
+		board.play_paddle_break()
 		# 마지막 목숨을 잃으면 처음부터 다시 — 아직 게임오버 화면이 없다.
 		if field.lives <= 0:
 			field.reset_run()
 			board.build(field.grid)
 			restarted = true
-	if not field.attached:
+	# 낙하 중인 공은 트레일을 안 남긴다 — 발사한 공의 궤적이 아니라서다.
+	if not field.attached and not field.dropping:
 		_trail.push(field.ball_pos, field.ball_vel.length())
 	if bool(r["cleared"]) and not restarted:
 		field.next_stage()
@@ -55,6 +65,11 @@ func step_once(delta: float) -> void:
 		_update_hud()
 
 func _unhandled_input(event: InputEvent) -> void:
+	if not _started:
+		if event is InputEventScreenTouch and (event as InputEventScreenTouch).pressed:
+			_started = true
+			title_screen.visible = false
+		return
 	if event is InputEventScreenDrag:
 		_target = screen_to_board((event as InputEventScreenDrag).position)
 	elif event is InputEventScreenTouch:

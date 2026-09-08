@@ -15,6 +15,8 @@ func _initialize() -> void:
 	_test_broken_list_carries_kind_before_the_destroying_hit()
 	_test_next_stage_advances_without_resetting_the_speed_ramp()
 	_test_reset_run_returns_to_the_first_stage()
+	_test_losing_a_life_drops_a_fresh_ball_onto_the_paddle()
+	_test_dropping_ball_tracks_the_paddle_sideways()
 	print("test_play_field: OK")
 	quit()
 
@@ -149,7 +151,8 @@ func _test_ball_below_zero_costs_a_life() -> void:
 			break
 	assert(lost, "공이 데드존으로 나갔는데 lost 가 아니다")
 	assert(f.lives == before - 1, "목숨이 안 줄었다: %d -> %d" % [before, f.lives])
-	assert(f.attached, "공을 잃으면 패들에 다시 붙어야 한다")
+	assert(not f.attached and f.dropping,
+		"공을 잃은 직후에는 바로 붙지 않고 떨어지는 중이어야 한다")
 
 func _test_clearing_all_bricks_reports_cleared() -> void:
 	var f := PlayField.new()
@@ -314,6 +317,60 @@ func _test_reset_run_returns_to_the_first_stage() -> void:
 	assert(f.lives == Tuning.LIVES, "목숨이 안 채워졌다: %d" % f.lives)
 	assert(is_equal_approx(f.elapsed, 0.0), "속도 램프가 안 돌아갔다: %f" % f.elapsed)
 	assert(f.grid.cells == StageGen.stage(0).cells, "0 판의 배치가 아니다")
-	assert(f.attached, "처음부터 다시인데 공이 안 붙었다")
+	assert(not f.attached and f.dropping,
+		"전멸도 공을 잃은 것이다 — 즉시 붙지 않고 떨어지는 중이어야 한다")
 	assert(f.ball_vel == Vector2.ZERO,
 		"처음부터 다시인데 공이 이전 속도를 들고 있다: %s" % f.ball_vel)
+
+# 목숨을 잃으면 즉시 붙지 않고 패들 위로 떨어져 내린다 — 그동안 화면에서는
+# 패들이 부서졌다 다시 생기는 연출이 돈다. 착지하면 보통 때처럼 붙는다.
+func _test_losing_a_life_drops_a_fresh_ball_onto_the_paddle() -> void:
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	f.attached = false
+	# 패들을 반대쪽으로 보내 둔다 — 안 그러면 떨어지는 공이 데드존 전에
+	# 패들에 먼저 맞아 목숨을 안 잃는다.
+	f.ball_pos = Vector2(Tuning.BOARD_HALF_WIDTH - Tuning.BALL_RADIUS, 0.2)
+	f.ball_vel = Vector2(0.0, -20.0)
+	var before_lives := f.lives
+	var r: Dictionary
+	for i in 60:
+		r = f.step(Vector2(-Tuning.BOARD_HALF_WIDTH, Tuning.PADDLE_BAND_MIN_V), DT)
+		if bool(r["lost"]):
+			break
+	assert(bool(r["lost"]), "공이 데드존까지 안 내려갔다 — 테스트 전제가 깨졌다")
+	assert(f.lives == before_lives - 1, "목숨이 하나 안 줄었다: %d -> %d" % [before_lives, f.lives])
+	assert(not f.attached and f.dropping,
+		"목숨을 잃은 직후 바로 붙어 버렸다 — 떨어지는 연출이 없다")
+	assert(f.ball_pos.y > f.paddle.pos.y, "떨어지는 공이 패들보다 낮은 곳에서 시작한다")
+
+	var landed := false
+	for i in 120:
+		f.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), DT)
+		if f.attached:
+			landed = true
+			break
+	assert(landed, "공이 패들에 안 내려앉았다")
+	assert(not f.dropping, "붙었는데 dropping 이 아직 켜져 있다")
+	assert(f.lives == before_lives - 1, "착지하는 동안 목숨이 더 줄었다: %d" % f.lives)
+
+# 떨어지는 중에 손가락이 움직이면 새 패들이 그 밑에 와 있어야 한다 —
+# 낙하 지점이 스폰 당시 x 에 고정돼 있으면 손가락을 옮긴 순간 헛착지가
+# 난다.
+func _test_dropping_ball_tracks_the_paddle_sideways() -> void:
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	# 목숨을 잃는 경로 자체는 위 테스트가 이미 본다. 여기서는 낙하 중
+	# x 추종만 보면 되므로 낙하 상태를 직접 만든다.
+	f._spawn_dropping()
+	assert(f.dropping, "테스트 전제가 깨졌다 — 낙하 중이 아니다")
+	var target_x := 1.5
+	for i in 60:
+		f.step(Vector2(target_x, Tuning.PADDLE_BAND_MIN_V), DT)
+		if f.attached:
+			break
+	assert(f.attached, "옆으로 옮긴 패들에 안 내려앉았다")
+	assert(is_equal_approx(f.ball_pos.x, f.paddle.pos.x),
+		"붙은 공이 패들 x 와 다르다: %f vs %f" % [f.ball_pos.x, f.paddle.pos.x])
+	assert(absf(f.paddle.pos.x) > 0.5,
+		"패들이 스폰 지점(x=0)에서 실제로는 안 옮겨졌다 — 이 테스트가 헛돈다: %f" % f.paddle.pos.x)

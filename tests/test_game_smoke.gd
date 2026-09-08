@@ -14,6 +14,8 @@ func _run() -> void:
 	_test_clear_and_run_over_in_one_frame_keeps_stage_zero()
 	_test_clearing_a_stage_advances_the_board_and_hud()
 	_test_stage_label_follows_the_stage_index()
+	_test_title_screen_blocks_play_until_touched()
+	_test_physics_gated_until_started()
 	await _test_screen_point_maps_to_board()
 	await _test_board_fits_in_camera()
 	print("test_game_smoke: OK")
@@ -106,6 +108,7 @@ func _test_clear_and_run_over_in_one_frame_keeps_stage_zero() -> void:
 	# 빈 격자 + 데드존 아래의 공. 이 한 프레임이 lost 와 cleared 를 동시에 낸다.
 	g.field.grid.fill_all(0)
 	g.field.attached = false
+	g.field.dropping = false
 	g.field.ball_pos = Vector2(0.0, -0.5)
 	g.field.ball_vel = Vector2(0.0, -1.0)
 	# g 의 정적 타입이 Node 라 g.field 는 Variant 로 잡힌다 — := 추론이 안 먹어
@@ -114,11 +117,14 @@ func _test_clear_and_run_over_in_one_frame_keeps_stage_zero() -> void:
 	assert(bool(r["lost"]) and bool(r["cleared"]),
 		"이 테스트의 전제가 깨졌다 — 한 프레임에 두 깃발이 같이 안 섰다: %s" % r)
 
-	# 전제를 확인했으니 같은 상황을 step_once() 로 다시 태운다.
+	# 전제를 확인했으니 같은 상황을 step_once() 로 다시 태운다. 위 호출이 이미
+	# dropping 을 켜 놨으므로 다시 꺼야 한다 — 안 그러면 field.step() 이 낙하
+	# 분기로 조기 반환해 lost/cleared 가 둘 다 안 서고 이 테스트가 헛돈다.
 	g.field.stage_index = 4
 	g.field.lives = 1
 	g.field.grid.fill_all(0)
 	g.field.attached = false
+	g.field.dropping = false
 	g.field.ball_pos = Vector2(0.0, -0.5)
 	g.field.ball_vel = Vector2(0.0, -1.0)
 	g.step_once(1.0 / 120.0)
@@ -150,6 +156,40 @@ func _test_clearing_a_stage_advances_the_board_and_hud() -> void:
 	assert(g.board.brick_count() > 0, "새 판 블럭이 화면에 안 올라왔다")
 	assert(g.stage_label.text == "판 2",
 		"판이 넘어갔는데 라벨이 안 따라왔다: %s" % g.stage_label.text)
+	g.free()
+
+# 게임 이름과 "Touch to Start" 화면이 첫 터치 전까지 입력을 막아야 한다 —
+# 안 그러면 손가락이 화면에 닿는 순간 타이틀도 못 보고 패들이 움직인다.
+func _test_title_screen_blocks_play_until_touched() -> void:
+	var packed := load("res://scenes/game.tscn") as PackedScene
+	var g := packed.instantiate()
+	root.add_child(g)
+	g._ready()
+	assert(not g._started, "시작 전인데 이미 시작 상태다")
+	assert(g.title_screen.visible, "시작 전인데 타이틀 화면이 안 보인다")
+	var touch := InputEventScreenTouch.new()
+	touch.pressed = true
+	g._unhandled_input(touch)
+	assert(g._started, "터치했는데 시작 상태로 안 바뀌었다")
+	assert(not g.title_screen.visible, "시작했는데 타이틀 화면이 안 사라졌다")
+	g.free()
+
+# _physics_process 자체가 타이틀 화면 동안 물리를 돌리면 안 된다. step_once
+# 를 직접 부르는 다른 테스트들은 이 가드를 우회하므로 여기서 따로 본다.
+func _test_physics_gated_until_started() -> void:
+	var packed := load("res://scenes/game.tscn") as PackedScene
+	var g := packed.instantiate()
+	root.add_child(g)
+	g._ready()
+	g.field.attached = false
+	g.field.ball_pos = Vector2(0.0, 5.0)
+	g.field.ball_vel = Vector2(0.0, 3.0)
+	var before: Vector2 = g.field.ball_pos
+	g._physics_process(1.0 / 120.0)
+	assert(g.field.ball_pos == before, "타이틀 화면인데 공이 움직였다")
+	g._started = true
+	g._physics_process(1.0 / 120.0)
+	assert(g.field.ball_pos != before, "시작했는데 물리가 안 돈다")
 	g.free()
 
 func _test_screen_point_maps_to_board() -> void:
