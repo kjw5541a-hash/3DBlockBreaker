@@ -10,6 +10,7 @@ extends Node3D
 @onready var _sfx_wall_hit: AudioStreamPlayer = $Sfx/WallHit
 @onready var _sfx_brick_break: AudioStreamPlayer = $Sfx/BrickBreak
 @onready var _sfx_stage_clear: AudioStreamPlayer = $Sfx/StageClear
+@onready var _sfx_life_lost: AudioStreamPlayer = $Sfx/LifeLost
 
 var field: PlayField
 # 손가락이 닿기 전에는 패들을 제자리에 둔다.
@@ -59,6 +60,7 @@ func step_once(delta: float) -> void:
 	if bool(r["lost"]):
 		_trail.reset()
 		board.play_paddle_break()
+		_play_sfx(_sfx_life_lost)
 		# 마지막 목숨을 잃으면 처음부터 다시 — 아직 게임오버 화면이 없다.
 		if field.lives <= 0:
 			field.reset_run()
