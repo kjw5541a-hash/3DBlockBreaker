@@ -63,7 +63,8 @@ func launch(swing: Vector2) -> void:
 
 func step(target: Vector2, dt: float) -> Dictionary:
 	paddle.update(target, dt)
-	var out := {"paddle_hit": false, "bricks_hit": 0, "broken": [], "lost": false, "cleared": false}
+	var out := {"paddle_hit": false, "wall_hit": false, "bricks_hit": 0, "broken": [],
+		"lost": false, "cleared": false}
 	if attached:
 		ball_pos = paddle.pos + Vector2(0.0, Tuning.PADDLE_THICKNESS * 0.5 + Tuning.BALL_RADIUS)
 		return out
@@ -88,9 +89,12 @@ func step(target: Vector2, dt: float) -> Dictionary:
 		ball_vel = BallPhysics.step_vel(ball_vel, sub)
 		ball_pos = BallPhysics.step_pos(ball_pos, ball_vel, sub)
 
+		var pre_wall_pos := ball_pos
 		var wall := BallPhysics.resolve_walls(ball_pos, ball_vel)
 		ball_pos = wall[0]
 		ball_vel = wall[1]
+		if ball_pos != pre_wall_pos:
+			out["wall_hit"] = true
 
 		var q := grid.query(ball_pos, Tuning.BALL_RADIUS)
 		if q["hit"]:

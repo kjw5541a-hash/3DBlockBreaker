@@ -17,6 +17,7 @@ func _initialize() -> void:
 	_test_reset_run_returns_to_the_first_stage()
 	_test_losing_a_life_drops_a_fresh_ball_onto_the_paddle()
 	_test_dropping_ball_tracks_the_paddle_sideways()
+	_test_wall_bounce_is_reported()
 	print("test_play_field: OK")
 	quit()
 
@@ -374,3 +375,20 @@ func _test_dropping_ball_tracks_the_paddle_sideways() -> void:
 		"붙은 공이 패들 x 와 다르다: %f vs %f" % [f.ball_pos.x, f.paddle.pos.x])
 	assert(absf(f.paddle.pos.x) > 0.5,
 		"패들이 스폰 지점(x=0)에서 실제로는 안 옮겨졌다 — 이 테스트가 헛돈다: %f" % f.paddle.pos.x)
+
+# 옆벽 충돌 사운드를 붙이려면 out 딕셔너리에 신호가 있어야 한다. 패들
+# 밴드에서 먼 높이에서 옆벽을 향해 쏴 패들에 먼저 닿을 여지를 없앤다.
+func _test_wall_bounce_is_reported() -> void:
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	f.attached = false
+	f.ball_pos = Vector2(Tuning.BOARD_HALF_WIDTH - Tuning.BALL_RADIUS - 0.05,
+		Tuning.BOARD_TOP_V * 0.5)
+	f.ball_vel = Vector2(20.0, 0.0)
+	var hit := false
+	for i in 30:
+		var r := f.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), DT)
+		if bool(r["wall_hit"]):
+			hit = true
+			break
+	assert(hit, "옆벽에 닿았는데 wall_hit 이 안 켜졌다")
