@@ -13,8 +13,6 @@ func _run() -> void:
 	_test_last_life_restarts()
 	_test_clear_and_run_over_in_one_frame_keeps_stage_zero()
 	_test_clearing_a_stage_advances_the_board_and_hud()
-	_test_stall_dots_show_remaining_budget()
-	_test_stall_dots_follow_the_counter()
 	_test_stage_label_follows_the_stage_index()
 	await _test_screen_point_maps_to_board()
 	await _test_board_fits_in_camera()
@@ -221,57 +219,6 @@ func _test_board_fits_in_camera() -> void:
 				% [u, v, rad_to_deg(av), rad_to_deg(half_v)])
 			assert(ah < half_h, "판 귀퉁이 (%f, %f) 가 좌우로 화면 밖이다: %f도 > %f도"
 				% [u, v, rad_to_deg(ah), rad_to_deg(half_h)])
-	g.free()
-
-# 남은 점이 곧 남은 예산이다. 규칙 자체는 안 건드리고 보이게만 한다 —
-# 안 보이면 단단 블럭을 두 번 치고 불괴를 한 번 스쳤을 때 왜 죽었는지
-# 알 방법이 없다.
-func _test_stall_dots_show_remaining_budget() -> void:
-	var packed := load("res://scenes/game.tscn") as PackedScene
-	var g := packed.instantiate()
-	root.add_child(g)
-	g._ready()
-	assert(g.stall_text(0).length() == Tuning.STALL_PADDLE_HITS,
-		"점 개수가 예산과 다르다: %s" % g.stall_text(0))
-	assert(g.stall_text(0).count("●") == Tuning.STALL_PADDLE_HITS,
-		"안 튕겼는데 점이 꺼져 있다: %s" % g.stall_text(0))
-	assert(g.stall_text(1).count("●") == Tuning.STALL_PADDLE_HITS - 1,
-		"한 번 튕겼는데 점이 안 꺼졌다: %s" % g.stall_text(1))
-	assert(g.stall_text(Tuning.STALL_PADDLE_HITS).count("●") == 0,
-		"예산을 다 썼는데 켜진 점이 남았다: %s" % g.stall_text(Tuning.STALL_PADDLE_HITS))
-	# 목숨을 잃는 순간의 카운터는 예산을 넘을 수 있다. 그때 문자열이
-	# 길어지거나 음수 repeat 로 죽으면 안 된다.
-	assert(g.stall_text(Tuning.STALL_PADDLE_HITS + 5).length() == Tuning.STALL_PADDLE_HITS,
-		"예산을 넘긴 값에서 점 개수가 늘었다: %s" % g.stall_text(Tuning.STALL_PADDLE_HITS + 5))
-	g.free()
-
-# 라벨이 실제로 카운터를 따라가는지. stall_text 만 맞고 배선이 없으면
-# 화면은 영영 ●●● 다.
-func _test_stall_dots_follow_the_counter() -> void:
-	var packed := load("res://scenes/game.tscn") as PackedScene
-	var g := packed.instantiate()
-	root.add_child(g)
-	g._ready()
-	assert(g.stall_label.text == g.stall_text(0),
-		"시작 상태가 안 찍혔다: %s" % g.stall_label.text)
-	# 패들과 블럭 띠 사이의 빈 구간에 정지시킨다. 패들에 붙여 두면 한 프레임
-	# 만에 다시 튕겨 카운터가 저절로 올라가고, 블럭 띠에 두면 깨져서 리셋된다 —
-	# 둘 다 이 테스트가 재려는 것과 무관한 이유로 값이 움직인다.
-	g.field.attached = false
-	g.field.ball_pos = Vector2(0.0, Tuning.BRICK_BOTTOM_V * 0.5)
-	g.field.ball_vel = Vector2.ZERO
-	g.field.paddle_hits_since_brick = 1
-	g.step_once(1.0 / 120.0)
-	assert(g.field.paddle_hits_since_brick == 1,
-		"테스트가 헛돈다 — 세워 둔 카운터가 저절로 움직였다: %d"
-		% g.field.paddle_hits_since_brick)
-	assert(g.stall_label.text == g.stall_text(1),
-		"카운터가 올랐는데 라벨이 그대로다: %s" % g.stall_label.text)
-	# 블럭을 깨면 예산이 복구된다. 그 복구도 화면에 보여야 한다.
-	g.field.paddle_hits_since_brick = 0
-	g.step_once(1.0 / 120.0)
-	assert(g.stall_label.text == g.stall_text(0),
-		"카운터가 리셋됐는데 라벨이 안 돌아왔다: %s" % g.stall_label.text)
 	g.free()
 
 # 판 번호가 안 보이면 절차 생성이 진행되고 있다는 유일한 단서가 없다.

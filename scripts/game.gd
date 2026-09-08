@@ -4,16 +4,12 @@ extends Node3D
 @onready var camera: Camera3D = $Camera3D
 @onready var lives_label: Label = $HUD/Lives
 @onready var version_label: Label = $HUD/Version
-@onready var stall_label: Label = $HUD/Stall
 @onready var stage_label: Label = $HUD/Stage
 
 var field: PlayField
 # 손가락이 닿기 전에는 패들을 제자리에 둔다.
 var _target: Vector2
 var _trail: BallTrail
-# 마지막으로 화면에 찍은 교착 카운터. 값이 그대로면 문자열을 새로 안 만든다 —
-# 120Hz 로 도는 루프에서 매 프레임 문자열을 만들 이유가 없다.
-var _shown_stall: int = -1
 
 func _ready() -> void:
 	field = PlayField.new()
@@ -23,7 +19,6 @@ func _ready() -> void:
 	# 어느 브랜치의 어느 커밋인지 눈으로 구별하려는 것이다.
 	version_label.text = str(ProjectSettings.get_setting("application/config/version"))
 	_update_hud()
-	_sync_stall()
 	_trail = BallTrail.new()
 	board.add_child(_trail)
 
@@ -34,7 +29,6 @@ func _physics_process(delta: float) -> void:
 func step_once(delta: float) -> void:
 	var r := field.step(_target, delta)
 	board.sync(field)
-	_sync_stall()
 	# step() 은 구조적으로 lost 와 cleared 를 한 dict 에 함께 담을 수 있다 — 서브스텝
 	# 루프가 out["lost"] 를 세우고 빠져나와도 remaining() 검사는 그대로 돌기 때문이다.
 	# 그러면 reset_run() 이 0 판으로 되돌린 직후 next_stage() 가 1 판으로 올려 버린다.
@@ -88,18 +82,3 @@ func _update_hud() -> void:
 	lives_label.text = "목숨 %d" % field.lives
 	# stage_index 는 0 기반이다. 플레이어에게 "0 판"을 보여줄 이유는 없다.
 	stage_label.text = "판 %d" % (field.stage_index + 1)
-
-# 남은 점이 곧 남은 예산이다. 이 카운터는 안 보이면 억울하다 — 단단 블럭을 두 번
-# 치고 불괴 블럭을 한 번 스치면 경고 없이 목숨이 날아가는데, 그게 규칙 때문인지
-# 사고인지 화면에 아무 단서가 없다.
-static func stall_text(hits: int) -> String:
-	var used := clampi(hits, 0, Tuning.STALL_PADDLE_HITS)
-	var left := Tuning.STALL_PADDLE_HITS - used
-	return "●".repeat(left) + "○".repeat(used)
-
-# 값이 바뀐 프레임에만 문자열을 만든다. 나머지 프레임은 int 비교 하나로 끝난다.
-func _sync_stall() -> void:
-	if field.paddle_hits_since_brick == _shown_stall:
-		return
-	_shown_stall = field.paddle_hits_since_brick
-	stall_label.text = stall_text(_shown_stall)

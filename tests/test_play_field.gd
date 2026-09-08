@@ -3,14 +3,14 @@ extends SceneTree
 func _initialize() -> void:
 	_test_passive_bounce_loses_energy()
 	_test_decay_sequence_never_stops()
-	_test_stall_costs_a_life()
+	_test_passive_rally_no_longer_costs_a_life()
 	_test_swing_accelerates_ball()
 	_test_early_game_caps_swing_speed()
 	_test_tilted_swing_changes_direction()
 	_test_paddle_never_double_bounces()
 	_test_ball_below_zero_costs_a_life()
 	_test_clearing_all_bricks_reports_cleared()
-	_test_hard_brick_only_resets_stall_when_broken()
+	_test_hard_brick_survives_the_first_hit()
 	_test_resting_ball_does_not_chip_a_brick_every_frame()
 	_test_broken_list_carries_kind_before_the_destroying_hit()
 	_test_next_stage_advances_without_resetting_the_speed_ramp()
@@ -51,8 +51,7 @@ func _test_passive_bounce_loses_energy() -> void:
 	assert(out.y > 0.0, "받은 공이 위로 안 간다: %s" % out)
 
 # 세게 친 공을 계속 가만히 받으면 도달 높이가 계속 줄어든다. 멈추는
-# 지점이 없다 — 하한을 없앤 것이 이 게임의 감쇠 설계 전부다. 교착은
-# 속도가 아니라 STALL_PADDLE_HITS 가 끝낸다.
+# 지점이 없다 — 하한을 없앤 것이 이 게임의 감쇠 설계 전부다.
 func _test_decay_sequence_never_stops() -> void:
 	var speeds: Array[float] = []
 	var v := 30.0
@@ -66,8 +65,14 @@ func _test_decay_sequence_never_stops() -> void:
 	assert(speeds[5] < Tuning.v_min(),
 		"옛 하한 아래로 안 내려갔다 — 하한이 아직 살아 있다: %s" % str(speeds))
 
-# 블럭을 못 깨고 패들에만 STALL_PADDLE_HITS 번 튕기면 목숨을 잃는다.
-func _test_stall_costs_a_life() -> void:
+# 블럭을 못 깨고 계속 받기만 하는 것은 더 이상 벌하지 않는다. 예전에는 세 번
+# 튕기면 목숨을 가져갔는데, 플레이해 보니 너무 가혹했다. 지금 목숨을 잃는
+# 조건은 데드존 하나뿐이다.
+#
+# 규칙이 없어도 뭉개는 것은 손해다: 반발계수가 도달 높이를 계속 깎아 공이
+# 패들 위로 가라앉으므로 블럭에 닿으려면 결국 스윙해야 하고, 그동안 elapsed 는
+# 계속 흘러 속도 램프만 오른다.
+func _test_passive_rally_no_longer_costs_a_life() -> void:
 	var f := PlayField.new()
 	f.grid.fill_all(0)
 	f.attached = false
@@ -75,19 +80,17 @@ func _test_stall_costs_a_life() -> void:
 	f.ball_vel = Vector2(0.0, -Tuning.v_min())
 	var before := f.lives
 	var hits := 0
-	var lost := false
 	for i in 1200:
 		var r := f.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), DT)
 		if r["paddle_hit"]:
 			hits += 1
-		if r["lost"]:
-			lost = true
-			break
-	assert(lost, "블럭을 못 깨고 계속 받기만 했는데 목숨을 안 잃었다")
-	assert(hits == Tuning.STALL_PADDLE_HITS,
-		"교착 판정이 %d번째가 아니라 %d번째에 났다" % [Tuning.STALL_PADDLE_HITS, hits])
-	assert(f.lives == before - 1, "목숨이 안 줄었다: %d -> %d" % [before, f.lives])
-	assert(f.paddle_hits_since_brick == 0, "다시 붙었는데 교착 카운터가 안 지워졌다")
+		assert(not bool(r["lost"]),
+			"가만히 받기만 했는데 %d 프레임에서 목숨을 잃었다 (패들 접촉 %d회)" % [i, hits])
+	assert(f.lives == before, "목숨이 줄었다: %d -> %d" % [before, f.lives])
+	# 공이 붙어 버렸거나 어딘가에 끼면 위 단언이 자명 참이 된다. 실제로 계속
+	# 주고받았는지 확인한다.
+	assert(hits > 10, "패들에 거의 안 닿았다 — 이 테스트가 아무것도 안 하고 있다: %d" % hits)
+	assert(not f.attached, "공이 도중에 다시 붙었다 — 목숨을 잃었다는 뜻이다")
 
 func _test_swing_accelerates_ball() -> void:
 	var f := PlayField.new()
@@ -190,24 +193,21 @@ func _max_swing_speed(elapsed: float) -> float:
 	assert(false, "패들에 안 맞았다")
 	return 0.0
 
-# 단단 블럭을 툭툭 건드리는 것으로 교착 규칙을 피할 수 있으면 규칙이
-# 아니라 요령이 된다. 리셋은 블럭이 실제로 깨졌을 때만이다.
-func _test_hard_brick_only_resets_stall_when_broken() -> void:
+# 단단 블럭은 한 대에 안 죽는다. 값이 곧 남은 히트 수이므로 첫 히트에서는
+# 2 에서 1 로 줄기만 하고, 두 번째 히트에서 사라진다.
+func _test_hard_brick_survives_the_first_hit() -> void:
 	var f := PlayField.new()
 	var r := BrickGrid.cell_rect(5, 0)
 	var below := Vector2(r.position.x + BrickGrid.CELL_W * 0.5,
 		r.position.y - Tuning.BALL_RADIUS - 0.01)
 	f.grid.cells[BrickGrid.index(5, 0)] = 2
 	f.attached = false
-	f.paddle_hits_since_brick = 2
 
 	f.ball_pos = below
 	f.ball_vel = Vector2(0.0, 8.0)
 	f.step(f.paddle.pos, 1.0 / 120.0)
 	assert(f.grid.get_cell(5, 0) == 1,
 		"단단 블럭이 한 대에 사라졌다: %d" % f.grid.get_cell(5, 0))
-	assert(f.paddle_hits_since_brick == 2,
-		"안 깨진 블럭이 교착 카운터를 리셋했다: %d" % f.paddle_hits_since_brick)
 
 	# 실제 플레이라면 첫 히트 후 반사로 공이 멀어져 한동안 안 닿는 프레임이
 	# 있었을 것이다 — 여기선 위치를 손으로 되돌리므로 그 "떠난 프레임"이
@@ -219,8 +219,6 @@ func _test_hard_brick_only_resets_stall_when_broken() -> void:
 	var out := f.step(f.paddle.pos, 1.0 / 120.0)
 	assert(f.grid.get_cell(5, 0) == 0,
 		"두 번째 히트에 안 깨졌다: %d" % f.grid.get_cell(5, 0))
-	assert(f.paddle_hits_since_brick == 0,
-		"깨졌는데 교착 카운터가 안 리셋됐다: %d" % f.paddle_hits_since_brick)
 	assert(int(out["bricks_hit"]) == 1,
 		"bricks_hit 이 깨진 개수를 안 센다: %d" % int(out["bricks_hit"]))
 

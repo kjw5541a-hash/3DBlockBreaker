@@ -7,9 +7,6 @@ var ball_pos: Vector2
 var ball_vel: Vector2 = Vector2.ZERO
 var attached: bool = true
 var lives: int = Tuning.LIVES
-# 마지막으로 블럭을 깬 뒤 패들에 몇 번 튕겼는지. 속도 하한을 없앤 대신
-# 이 값이 교착을 끝낸다.
-var paddle_hits_since_brick: int = 0
 # 공이 살아 있던 누적 시간. 잘 맞은 공의 상한이 이 값으로 오른다.
 var elapsed: float = 0.0
 # 지금 몇 판인지. 0 기반이다 — HUD 만 +1 해서 보여준다. 시드가 이 값이라
@@ -29,7 +26,6 @@ func _init() -> void:
 
 func _attach() -> void:
 	attached = true
-	paddle_hits_since_brick = 0
 	ball_vel = Vector2.ZERO
 	ball_pos = paddle.pos + Vector2(0.0, Tuning.PADDLE_THICKNESS * 0.5 + Tuning.BALL_RADIUS)
 	_last_damaged = -1
@@ -77,14 +73,12 @@ func step(target: Vector2, dt: float) -> Dictionary:
 				# 히트에서는 종류가 이미 0 이 되어 무엇이 깨졌는지 알 수 없다.
 				var kind := grid.get_cell(q["col"], q["row"])
 				grid.hit(q["col"], q["row"])
-				# 깨졌을 때만 센다. 단단 블럭을 툭툭 건드리는 것으로 교착 규칙을
-				# 피할 수 있으면 규칙이 아니라 요령이 된다. 불괴 블럭은 영원히
-				# 안 깨지므로 영원히 리셋하지 않는다 — 그게 맞다.
+				# 깨졌을 때만 센다. 단단 블럭은 마지막 히트에서만 목록에 오르고,
+				# 불괴 블럭은 영원히 안 오른다.
 				if grid.get_cell(q["col"], q["row"]) == 0:
 					(out["broken"] as Array).append(
 						{"col": q["col"], "row": q["row"], "kind": kind})
 					out["bricks_hit"] = (out["broken"] as Array).size()
-					paddle_hits_since_brick = 0
 			_last_damaged = i
 			# 블럭은 에너지를 잃지 않는다. 손실원은 패들뿐이다. 반사는
 			# 디바운스와 무관하게 항상 일어난다 — 그렇지 않으면 공이 블럭
@@ -102,12 +96,13 @@ func step(target: Vector2, dt: float) -> Dictionary:
 				Tuning.v_max_at(elapsed))
 			if ball_vel != before:
 				out["paddle_hit"] = true
-				paddle_hits_since_brick += 1
 				# 패들 표면 밖으로 꺼내 다음 스텝에 다시 물리지 않게 한다.
 				ball_pos.y = paddle.pos.y + Tuning.PADDLE_THICKNESS * 0.5 + Tuning.BALL_RADIUS
 
-		# 블럭을 못 깨고 패들에만 계속 튕기는 교착. 데드존과 똑같이 처리한다.
-		if ball_pos.y < 0.0 or paddle_hits_since_brick >= Tuning.STALL_PADDLE_HITS:
+		# 데드존. 목숨을 잃는 유일한 조건이다 — 블럭을 못 깨고 계속 받기만
+		# 하는 것은 벌하지 않는다. 반발계수가 도달 높이를 깎아 공이 패들 위로
+		# 가라앉고, 그동안 elapsed 는 계속 흘러 속도 램프만 오른다.
+		if ball_pos.y < 0.0:
 			lives -= 1
 			out["lost"] = true
 			_attach()
