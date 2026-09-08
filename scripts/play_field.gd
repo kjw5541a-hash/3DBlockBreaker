@@ -6,6 +6,9 @@ var paddle: PaddleState
 var ball_pos: Vector2
 var ball_vel: Vector2 = Vector2.ZERO
 var attached: bool = true
+# 목숨을 잃은 직후, 새 공이 패들 위로 떨어져 내리는 중이다. attached 와
+# 배타적이다 — 착지하면 _attach() 가 이 값을 끈다.
+var dropping: bool = false
 var lives: int = Tuning.LIVES
 # 공이 살아 있던 누적 시간. 잘 맞은 공의 상한이 이 값으로 오른다.
 var elapsed: float = 0.0
@@ -19,6 +22,10 @@ var stage_index: int = 0
 # 아니다 — BrickGrid.INDESTRUCTIBLE 의 -1 과는 다른 뜻이다.
 var _last_damaged: int = -1
 
+# 목숨을 잃은 새 공이 떨어져 내리기 시작하는 높이. 패들 바로 위, 눈에
+# 보일 만큼만 띄운다 — 너무 높으면 착지까지 기다리는 게 지루해진다.
+const DROP_HEIGHT := 1.0
+
 func _init() -> void:
 	grid = StageGen.stage(stage_index)
 	paddle = PaddleState.new(0.0)
@@ -26,8 +33,20 @@ func _init() -> void:
 
 func _attach() -> void:
 	attached = true
+	dropping = false
 	ball_vel = Vector2.ZERO
 	ball_pos = paddle.pos + Vector2(0.0, Tuning.PADDLE_THICKNESS * 0.5 + Tuning.BALL_RADIUS)
+	_last_damaged = -1
+
+# 목숨을 잃었을 때만 부른다. 공을 패들 바로 위에서 떨어뜨려 "새 공이
+# 왔다"는 것을 보여준다 — 판이 넘어가거나(next_stage) 전멸 없이 이어질
+# 때(_attach)는 그냥 즉시 붙는다, 그건 손실이 아니라서다.
+func _spawn_dropping() -> void:
+	attached = false
+	dropping = true
+	ball_vel = Vector2.ZERO
+	ball_pos = Vector2(paddle.pos.x,
+		paddle.pos.y + Tuning.PADDLE_THICKNESS * 0.5 + Tuning.BALL_RADIUS + DROP_HEIGHT)
 	_last_damaged = -1
 
 # 붙어 있는 공을 스윙 속도로 쏜다. 탭만 하면(스윙 0) 하한으로 수직
@@ -47,6 +66,17 @@ func step(target: Vector2, dt: float) -> Dictionary:
 	var out := {"paddle_hit": false, "bricks_hit": 0, "broken": [], "lost": false, "cleared": false}
 	if attached:
 		ball_pos = paddle.pos + Vector2(0.0, Tuning.PADDLE_THICKNESS * 0.5 + Tuning.BALL_RADIUS)
+		return out
+	if dropping:
+		# x 는 패들을 그대로 따라간다 — 낙하 중에 손가락이 움직여도 헛착지가
+		# 안 나야 해서다. y 만 중력으로 떨어뜨린다. 벽·블럭과는 부딪히지
+		# 않는다 — 패들 바로 위 짧은 낙하라 부딪힐 것이 없다.
+		ball_pos.x = paddle.pos.x
+		ball_vel.y -= Tuning.GRAVITY * dt
+		ball_pos.y += ball_vel.y * dt
+		var land_y := paddle.pos.y + Tuning.PADDLE_THICKNESS * 0.5 + Tuning.BALL_RADIUS
+		if ball_pos.y <= land_y:
+			_attach()
 		return out
 	elapsed += dt
 
@@ -105,7 +135,7 @@ func step(target: Vector2, dt: float) -> Dictionary:
 		if ball_pos.y < 0.0:
 			lives -= 1
 			out["lost"] = true
-			_attach()
+			_spawn_dropping()
 			break
 
 	if grid.remaining() == 0:
@@ -129,10 +159,11 @@ func next_stage() -> void:
 	grid = StageGen.stage(stage_index)
 	_attach()
 
-# 전멸. 여기서만 램프가 0 으로 돌아간다.
+# 전멸. 여기서만 램프가 0 으로 돌아간다. 이것도 공을 잃은 것이므로
+# _attach() 대신 낙하로 시작한다.
 func reset_run() -> void:
 	lives = Tuning.LIVES
 	elapsed = 0.0
 	stage_index = 0
 	grid = StageGen.stage(stage_index)
-	_attach()
+	_spawn_dropping()

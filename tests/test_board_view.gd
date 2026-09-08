@@ -9,6 +9,7 @@ func _initialize() -> void:
 	_test_hard_brick_mesh_updates_on_hit()
 	_test_build_and_remove_bricks()
 	_test_walls_mark_the_boundary()
+	_test_paddle_break_hides_then_restores_the_paddle()
 	print("test_board_view: OK")
 	quit()
 
@@ -107,4 +108,20 @@ func _test_hard_brick_mesh_updates_on_hit() -> void:
 		.material_override as StandardMaterial3D).albedo_color
 	assert(after.v < before.v,
 		"맞은 단단 블럭의 색이 안 바뀌었다: %f -> %f" % [before.v, after.v])
+	view.free()
+
+# 목숨을 잃은 자리를 눈에 보이게 하려는 연출이다. 부서지는 순간 패들이
+# 안 보여야 하고, 연출이 끝나면 새 패들처럼 다시 보여야 한다. Tween 은
+# 엔진 프레임을 기다려야 진행되므로 custom_step 으로 직접 밀어붙인다.
+func _test_paddle_break_hides_then_restores_the_paddle() -> void:
+	var view := BoardView.new()
+	root.add_child(view)
+	var g := BrickGrid.new()
+	g.fill_all(0)
+	view.build(g)
+	assert(view._paddle.visible, "시작부터 패들이 안 보인다 — 테스트 전제가 깨졌다")
+	var respawn_tween := view.play_paddle_break()
+	assert(not view._paddle.visible, "부서지는 순간인데 패들이 그대로 보인다")
+	respawn_tween.custom_step(BoardView._BREAK_DURATION + 0.01)
+	assert(view._paddle.visible, "연출이 끝났는데 패들이 안 돌아왔다")
 	view.free()
