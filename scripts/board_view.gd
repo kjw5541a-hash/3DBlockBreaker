@@ -143,6 +143,37 @@ func _make_paddle_fragment() -> MeshInstance3D:
 	m.material_override = mat
 	return m
 
+# 블럭이 깨진 자리를 눈에 보이게 한다. refresh_bricks() 가 이미 실제
+# 블럭 메시를 지운 뒤이므로, 이건 그 자리에 흩뿌리는 순전한 장식이다.
+# 벽돌 종류의 색과 두께를 그대로 물려받아 무엇이 깨졌는지 알아보게 한다.
+func play_brick_break(col: int, row: int, kind: int) -> void:
+	var tree := Engine.get_main_loop() as SceneTree
+	var rect := BrickGrid.cell_rect(col, row)
+	var h := brick_height(kind)
+	var origin := board_to_local(rect.position + rect.size * 0.5, h * 0.5)
+	var color := brick_color(kind, row)
+	for i in 4:
+		var frag := _make_brick_fragment(color, h)
+		frag.position = origin
+		add_child(frag)
+		var dir := Vector3(randf_range(-1.0, 1.0), randf_range(0.3, 1.0),
+			randf_range(-1.0, 1.0)).normalized()
+		var frag_tween := tree.create_tween()
+		frag_tween.set_parallel(true)
+		frag_tween.tween_property(frag, "position", origin + dir * 0.6, _BREAK_DURATION)
+		frag_tween.tween_property(frag, "scale", Vector3.ZERO, _BREAK_DURATION)
+		frag_tween.chain().tween_callback(frag.queue_free)
+
+func _make_brick_fragment(color: Color, brick_h: float) -> MeshInstance3D:
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(0.16, brick_h * 0.5, 0.16)
+	var m := MeshInstance3D.new()
+	m.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	m.material_override = mat
+	return m
+
 func sync(field: PlayField) -> void:
 	refresh_bricks(field.grid)
 	_ball.position = board_to_local(field.ball_pos, Tuning.BALL_RADIUS)

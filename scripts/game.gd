@@ -33,6 +33,9 @@ func _physics_process(delta: float) -> void:
 # 테스트에서도 부를 수 있게 프레임 루프와 분리한다.
 func step_once(delta: float) -> void:
 	var r := field.step(_target, delta)
+	for b in (r["broken"] as Array):
+		var bd := b as Dictionary
+		board.play_brick_break(int(bd["col"]), int(bd["row"]), int(bd["kind"]))
 	board.sync(field)
 	# step() 은 구조적으로 lost 와 cleared 를 한 dict 에 함께 담을 수 있다 — 서브스텝
 	# 루프가 out["lost"] 를 세우고 빠져나와도 remaining() 검사는 그대로 돌기 때문이다.

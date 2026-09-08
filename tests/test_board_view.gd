@@ -10,6 +10,7 @@ func _initialize() -> void:
 	_test_build_and_remove_bricks()
 	_test_walls_mark_the_boundary()
 	_test_paddle_break_hides_then_restores_the_paddle()
+	_test_brick_break_spawns_fragments()
 	print("test_board_view: OK")
 	quit()
 
@@ -124,4 +125,18 @@ func _test_paddle_break_hides_then_restores_the_paddle() -> void:
 	assert(not view._paddle.visible, "부서지는 순간인데 패들이 그대로 보인다")
 	respawn_tween.custom_step(BoardView._BREAK_DURATION + 0.01)
 	assert(view._paddle.visible, "연출이 끝났는데 패들이 안 돌아왔다")
+	view.free()
+
+# 블럭이 깨진 자리를 눈에 보이게 하려는 연출이다. 실제 블럭 메시는 이미
+# refresh_bricks() 로 지워졌을 자리이므로, 여기서는 조각이 실제로
+# 생기는지만 본다.
+func _test_brick_break_spawns_fragments() -> void:
+	var view := BoardView.new()
+	root.add_child(view)
+	var g := BrickGrid.new()
+	g.fill_all(0)
+	view.build(g)
+	var before := view.get_child_count()
+	view.play_brick_break(2, 1, 3)
+	assert(view.get_child_count() > before, "블럭이 깨졌는데 조각이 안 생겼다")
 	view.free()
