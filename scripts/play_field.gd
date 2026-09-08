@@ -22,6 +22,10 @@ var stage_index: int = 0
 # 아니다 — BrickGrid.INDESTRUCTIBLE 의 -1 과는 다른 뜻이다.
 var _last_damaged: int = -1
 
+# 지금 떨어지는 중인 아이템들. 원소는 {"pos": Vector2, "kind": int} 다.
+# 개수가 판당 3 개라 배열 순회로 충분하다.
+var items: Array[Dictionary] = []
+
 # 목숨을 잃은 새 공이 떨어져 내리기 시작하는 높이. 패들 바로 위, 눈에
 # 보일 만큼만 띄운다 — 너무 높으면 착지까지 기다리는 게 지루해진다.
 const DROP_HEIGHT := 1.0
@@ -64,7 +68,11 @@ func launch(swing: Vector2) -> void:
 func step(target: Vector2, dt: float) -> Dictionary:
 	paddle.update(target, dt)
 	var out := {"paddle_hit": false, "wall_hit": false, "bricks_hit": 0, "broken": [],
-		"lost": false, "cleared": false}
+		"items_taken": [], "lost": false, "cleared": false}
+	# 아이템은 공과 독립이다. 공이 발사 전에 붙어 있든 목숨을 잃어 새 공이
+	# 낙하 중이든 화면의 아이템은 계속 내려와야 한다 — 그래서 아래 조기
+	# 반환들보다 앞이다.
+	_update_items(dt, out)
 	if attached:
 		ball_pos = paddle.pos + Vector2(0.0, Tuning.PADDLE_THICKNESS * 0.5 + Tuning.BALL_RADIUS)
 		return out
@@ -113,6 +121,7 @@ func step(target: Vector2, dt: float) -> Dictionary:
 					(out["broken"] as Array).append(
 						{"col": q["col"], "row": q["row"], "kind": kind})
 					out["bricks_hit"] = (out["broken"] as Array).size()
+					_spawn_item(q["col"], q["row"])
 			_last_damaged = i
 			# 블럭은 에너지를 잃지 않는다. 손실원은 패들뿐이다. 반사는
 			# 디바운스와 무관하게 항상 일어난다 — 그렇지 않으면 공이 블럭
@@ -146,6 +155,45 @@ func step(target: Vector2, dt: float) -> Dictionary:
 		out["cleared"] = true
 	return out
 
+# 표시된 블럭이 파괴되는 순간 떨어진다. 부르는 자리가 이미 "칸이 0 이 됐을
+# 때"라 단단 블럭의 마지막 히트에서만 온다 — 여기서 따로 볼 것이 없다.
+func _spawn_item(col: int, row: int) -> void:
+	var kind := grid.take_item(col, row)
+	if kind == Item.NONE:
+		return
+	var rect := BrickGrid.cell_rect(col, row)
+	items.append({"pos": rect.position + rect.size * 0.5, "kind": kind})
+
+# 등속 낙하 + 패들 스윕 상자와의 겹침 판정. 스윕을 쓰는 이유는 공과 같다 —
+# 빠르게 지나가는 패들이 아이템을 그냥 통과하면 안 된다.
+func _update_items(dt: float, out: Dictionary) -> void:
+	var kept: Array[Dictionary] = []
+	var sweep := paddle.swept_rect()
+	for it in items:
+		var p := (it["pos"] as Vector2) - Vector2(0.0, Tuning.ITEM_FALL_SPEED * dt)
+		it["pos"] = p
+		if sweep.intersects(_item_rect(p)):
+			var kind := int(it["kind"])
+			(out["items_taken"] as Array).append(kind)
+			_apply_item(kind)
+			continue
+		# 판 아래로 지나간 것은 그냥 사라진다. 놓친 것을 벌하면 아이템이
+		# 보상이 아니라 위험이 된다.
+		if p.y < -Tuning.ITEM_HALF_SIZE:
+			continue
+		kept.append(it)
+	items = kept
+
+static func _item_rect(p: Vector2) -> Rect2:
+	var h := Tuning.ITEM_HALF_SIZE
+	return Rect2(p.x - h, p.y - h, h * 2.0, h * 2.0)
+
+# P 는 즉발이라 활성 슬롯이 없다. 지속 효과(E, S, C, L)가 들어오는 4b 에서
+# 슬롯이 여기 붙는다 — 담을 것이 없는 슬롯을 미리 만들지 않는다.
+func _apply_item(kind: int) -> void:
+	if kind == Item.P:
+		lives += 1
+
 # 공 원이 패들의 스윕 상자에 닿았는지. 상자가 축정렬이라 가장 가까운
 # 점까지의 거리로 판정한다.
 func _touches_paddle() -> bool:
@@ -161,6 +209,8 @@ func _touches_paddle() -> bool:
 func next_stage() -> void:
 	stage_index += 1
 	grid = StageGen.stage(stage_index)
+	# 지난 판의 아이템이 새 판 하늘에서 계속 떨어지면 어느 판의 것인지 알 수 없다.
+	items.clear()
 	_attach()
 
 # 전멸. 여기서만 램프가 0 으로 돌아간다. 이것도 공을 잃은 것이므로
@@ -170,4 +220,5 @@ func reset_run() -> void:
 	elapsed = 0.0
 	stage_index = 0
 	grid = StageGen.stage(stage_index)
+	items.clear()
 	_spawn_dropping()

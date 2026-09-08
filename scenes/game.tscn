@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scripts/game.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/board_view.gd" id="2"]
@@ -7,6 +7,7 @@
 [ext_resource type="AudioStreamWAV" path="res://sfx/brick_break.wav" id="5"]
 [ext_resource type="AudioStreamWAV" path="res://sfx/stage_clear.wav" id="6"]
 [ext_resource type="AudioStreamWAV" path="res://sfx/life_lost.wav" id="7"]
+[ext_resource type="AudioStreamWAV" path="res://sfx/item_get.wav" id="8"]
 
 [node name="Game" type="Node3D"]
 script = ExtResource("1")
@@ -41,6 +42,9 @@ stream = ExtResource("6")
 
 [node name="LifeLost" type="AudioStreamPlayer" parent="Sfx"]
 stream = ExtResource("7")
+
+[node name="ItemGet" type="AudioStreamPlayer" parent="Sfx"]
+stream = ExtResource("8")
 
 [node name="HUD" type="CanvasLayer" parent="."]
 

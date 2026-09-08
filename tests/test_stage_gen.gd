@@ -6,6 +6,7 @@ func _initialize() -> void:
 	_test_invariants_hold_for_first_hundred_stages()
 	_test_no_gap_is_wider_than_the_curve_allows()
 	_test_levers_arrive_on_schedule()
+	_test_every_stage_carries_exactly_the_promised_items()
 	print("test_stage_gen: OK")
 	quit()
 
@@ -94,3 +95,26 @@ func _test_levers_arrive_on_schedule() -> void:
 
 	assert(StageGen.max_gap(0) == 3, "첫 판 빈칸 상한이 3 이 아니다")
 	assert(StageGen.max_gap(50) == 1, "빈칸 상한이 1 까지 안 좁아진다")
+
+# 확률이 아니라 개수라는 것이 이 규칙의 전부다. 확률로 새면 아이템이 한 번도
+# 안 나오는 판이 생기고, 그 판만 유독 어렵다. 아이템이 깰 수 없는 칸에 실리면
+# 개수를 맞춰 놓고도 영원히 안 떨어진다.
+func _test_every_stage_carries_exactly_the_promised_items() -> void:
+	for index in 101:
+		var g := StageGen.stage(index)
+		var carried := 0
+		for i in g.item_cells.size():
+			if g.item_cells[i] == Item.NONE:
+				continue
+			carried += 1
+			assert(g.cells[i] > 0,
+				"판 %d 의 %d 번 칸에 아이템이 있는데 깰 수 있는 블럭이 아니다: %d" % [
+					index, i, g.cells[i]])
+		assert(carried == StageGen.ITEM_COUNT,
+			"판 %d 의 아이템 수가 약속과 다르다: %d vs %d" % [
+				index, carried, StageGen.ITEM_COUNT])
+	# 배치가 그렇듯 아이템 자리도 판 번호만으로 정해져야 한다.
+	assert(StageGen.stage(7).item_cells == StageGen.stage(7).item_cells,
+		"같은 판이 다른 아이템 자리를 냈다")
+	assert(StageGen.stage(7).item_cells != StageGen.stage(8).item_cells,
+		"판이 달라도 아이템 자리가 같다 — 시드가 안 먹었다")

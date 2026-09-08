@@ -30,6 +30,11 @@ const INDESTRUCTIBLE_MAX := 8
 const GAP_START := 3
 const GAP_MIN := 1
 
+# 확률이 아니라 개수다. 판마다 정확히 이만큼 떨어지므로 아이템이 한 번도
+# 안 나오는 운 나쁜 판이 없다. 난이도 곡선을 안 타는 것은 아이템이 난이도
+# 레버가 아니라 보상이기 때문이다.
+const ITEM_COUNT := 3
+
 static func stage(index: int) -> BrickGrid:
 	var g := BrickGrid.new()
 	var rng := RandomNumberGenerator.new()
@@ -40,6 +45,7 @@ static func stage(index: int) -> BrickGrid:
 	for row in Tuning.BRICK_ROWS:
 		_fill_row(g, rng, row, d, hard, gap)
 	_place_indestructible(g, rng, indestructible_count(index))
+	_place_items(g, rng, ITEM_COUNT)
 	return g
 
 # 레버 A. 판 1–3 에서 55%→70%, 그 뒤 판 14 까지 90% 로 간다.
@@ -115,16 +121,34 @@ static func _place_indestructible(g: BrickGrid, rng: RandomNumberGenerator,
 		for col in half:
 			if g.cells[BrickGrid.index(col, row)] > 0:
 				spots.append(BrickGrid.index(col, row))
-	# Array.shuffle() 은 전역 RNG 를 쓴다 — 시드가 안 먹어 판이 매번 달라진다.
-	# 시드 붙은 rng 로 직접 섞는다.
-	for i in range(spots.size() - 1, 0, -1):
-		var j := rng.randi_range(0, i)
-		var t := spots[i]
-		spots[i] = spots[j]
-		spots[j] = t
+	_shuffle(spots, rng)
 	for i in mini(count / 2, spots.size()):
 		var idx := spots[i]
 		var row := idx / Tuning.BRICK_COLS
 		var col := idx % Tuning.BRICK_COLS
 		g.cells[idx] = BrickGrid.INDESTRUCTIBLE
 		g.cells[BrickGrid.index(Tuning.BRICK_COLS - 1 - col, row)] = BrickGrid.INDESTRUCTIBLE
+
+# 깰 수 있는 칸 중에서만 고른다. 불괴 칸에 넣으면 영원히 안 떨어지므로
+# 불괴를 다 놓은 뒤에 부른다.
+#
+# 불괴 블럭과 달리 좌우 대칭으로 놓지 않는다. 여기서는 개수 보장이 대칭보다
+# 우선이다 — 쌍으로 놓으면 홀수 개를 정확히 맞출 수 없다. 아이템은 배치의
+# 일부가 아니라 그 위에 얹힌 보상이라 대칭이 깨져도 판이 잡음으로 안 보인다.
+static func _place_items(g: BrickGrid, rng: RandomNumberGenerator, count: int) -> void:
+	var spots: Array[int] = []
+	for i in g.cells.size():
+		if g.cells[i] > 0:
+			spots.append(i)
+	_shuffle(spots, rng)
+	for i in mini(count, spots.size()):
+		g.item_cells[spots[i]] = Item.P
+
+# Array.shuffle() 은 전역 RNG 를 쓴다 — 시드가 안 먹어 판이 매번 달라진다.
+# 시드 붙은 rng 로 직접 섞는다.
+static func _shuffle(arr: Array[int], rng: RandomNumberGenerator) -> void:
+	for i in range(arr.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var t := arr[i]
+		arr[i] = arr[j]
+		arr[j] = t

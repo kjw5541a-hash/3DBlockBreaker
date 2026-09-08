@@ -11,6 +11,7 @@ extends Node3D
 @onready var _sfx_brick_break: AudioStreamPlayer = $Sfx/BrickBreak
 @onready var _sfx_stage_clear: AudioStreamPlayer = $Sfx/StageClear
 @onready var _sfx_life_lost: AudioStreamPlayer = $Sfx/LifeLost
+@onready var _sfx_item_get: AudioStreamPlayer = $Sfx/ItemGet
 
 var field: PlayField
 # 손가락이 닿기 전에는 패들을 제자리에 둔다.
@@ -47,6 +48,11 @@ func step_once(delta: float) -> void:
 		_play_sfx(_sfx_paddle_hit)
 	if bool(r["wall_hit"]):
 		_play_sfx(_sfx_wall_hit)
+	# P 는 목숨을 늘리므로 HUD 를 여기서 갱신한다 — 아래 lost/cleared 갱신은
+	# 아이템을 먹기만 한 프레임에는 안 걸린다.
+	if (r["items_taken"] as Array).size() > 0:
+		_play_sfx(_sfx_item_get)
+		_update_hud()
 	board.sync(field)
 	# step() 은 구조적으로 lost 와 cleared 를 한 dict 에 함께 담을 수 있다 — 서브스텝
 	# 루프가 out["lost"] 를 세우고 빠져나와도 remaining() 검사는 그대로 돌기 때문이다.
