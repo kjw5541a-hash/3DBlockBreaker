@@ -1,7 +1,12 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/game.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/board_view.gd" id="2"]
+[ext_resource type="AudioStreamWAV" path="res://sfx/paddle_hit.wav" id="3"]
+[ext_resource type="AudioStreamWAV" path="res://sfx/wall_hit.wav" id="4"]
+[ext_resource type="AudioStreamWAV" path="res://sfx/brick_break.wav" id="5"]
+[ext_resource type="AudioStreamWAV" path="res://sfx/stage_clear.wav" id="6"]
+[ext_resource type="AudioStreamWAV" path="res://sfx/life_lost.wav" id="7"]
 
 [node name="Game" type="Node3D"]
 script = ExtResource("1")
@@ -19,6 +24,23 @@ fov = 26.5
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 rotation = Vector3(-0.872665, -0.523599, 0)
 shadow_enabled = true
+
+[node name="Sfx" type="Node" parent="."]
+
+[node name="PaddleHit" type="AudioStreamPlayer" parent="Sfx"]
+stream = ExtResource("3")
+
+[node name="WallHit" type="AudioStreamPlayer" parent="Sfx"]
+stream = ExtResource("4")
+
+[node name="BrickBreak" type="AudioStreamPlayer" parent="Sfx"]
+stream = ExtResource("5")
+
+[node name="StageClear" type="AudioStreamPlayer" parent="Sfx"]
+stream = ExtResource("6")
+
+[node name="LifeLost" type="AudioStreamPlayer" parent="Sfx"]
+stream = ExtResource("7")
 
 [node name="HUD" type="CanvasLayer" parent="."]
 

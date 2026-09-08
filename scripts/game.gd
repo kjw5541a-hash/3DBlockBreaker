@@ -6,6 +6,11 @@ extends Node3D
 @onready var version_label: Label = $HUD/Version
 @onready var stage_label: Label = $HUD/Stage
 @onready var title_screen: Control = $HUD/TitleScreen
+@onready var _sfx_paddle_hit: AudioStreamPlayer = $Sfx/PaddleHit
+@onready var _sfx_wall_hit: AudioStreamPlayer = $Sfx/WallHit
+@onready var _sfx_brick_break: AudioStreamPlayer = $Sfx/BrickBreak
+@onready var _sfx_stage_clear: AudioStreamPlayer = $Sfx/StageClear
+@onready var _sfx_life_lost: AudioStreamPlayer = $Sfx/LifeLost
 
 var field: PlayField
 # 손가락이 닿기 전에는 패들을 제자리에 둔다.
@@ -36,6 +41,12 @@ func step_once(delta: float) -> void:
 	for b in (r["broken"] as Array):
 		var bd := b as Dictionary
 		board.play_brick_break(int(bd["col"]), int(bd["row"]), int(bd["kind"]))
+	if (r["broken"] as Array).size() > 0:
+		_play_sfx(_sfx_brick_break)
+	if bool(r["paddle_hit"]):
+		_play_sfx(_sfx_paddle_hit)
+	if bool(r["wall_hit"]):
+		_play_sfx(_sfx_wall_hit)
 	board.sync(field)
 	# step() 은 구조적으로 lost 와 cleared 를 한 dict 에 함께 담을 수 있다 — 서브스텝
 	# 루프가 out["lost"] 를 세우고 빠져나와도 remaining() 검사는 그대로 돌기 때문이다.
@@ -49,6 +60,7 @@ func step_once(delta: float) -> void:
 	if bool(r["lost"]):
 		_trail.reset()
 		board.play_paddle_break()
+		_play_sfx(_sfx_life_lost)
 		# 마지막 목숨을 잃으면 처음부터 다시 — 아직 게임오버 화면이 없다.
 		if field.lives <= 0:
 			field.reset_run()
@@ -58,11 +70,20 @@ func step_once(delta: float) -> void:
 	if not field.attached and not field.dropping:
 		_trail.push(field.ball_pos, field.ball_vel.length())
 	if bool(r["cleared"]) and not restarted:
+		_play_sfx(_sfx_stage_clear)
 		field.next_stage()
 		_trail.reset()
 		board.build(field.grid)
 	if bool(r["lost"]) or bool(r["cleared"]):
 		_update_hud()
+
+# 테스트 하네스는 root.add_child() 를 _initialize() 안에서 부르는데, 그
+# 시점엔 노드가 아직 트리에 편입되지 않는다 — AudioStreamPlayer.play() 는
+# 트리 밖에서 부르면 에러를 낸다. 실제 게임에선 항상 트리 안이라 이 가드가
+# 동작을 바꾸지 않는다.
+func _play_sfx(player: AudioStreamPlayer) -> void:
+	if is_inside_tree():
+		player.play()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not _started:
