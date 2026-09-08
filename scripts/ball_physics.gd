@@ -69,6 +69,6 @@ static func paddle_bounce(v_in: Vector2, normal: Vector2, paddle_vel: Vector2,
 	var out := reflect(v_in, normal) * Tuning.PADDLE_RESTITUTION
 	out += paddle_vel * Tuning.PADDLE_SPEED_TRANSFER
 	# 하한 없음. 가만히 받으면 반발계수만큼 계속 느려지고 도달 높이가
-	# 낮아진다 — 그 상태로 버티면 STALL_PADDLE_HITS 가 목숨을 가져간다.
+	# 낮아진다 — 결국 공이 패들 위로 가라앉는다. 다시 띄우려면 스윙해야 한다.
 	out = clamp_speed(out, 0.0, v_max)
 	return enforce_min_angle(out, Tuning.MIN_ANGLE_DEG)

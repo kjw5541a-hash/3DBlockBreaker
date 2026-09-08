@@ -29,19 +29,11 @@ offset_right = 320.0
 offset_bottom = 64.0
 text = "목숨 -"
 
-[node name="Stall" type="Label" parent="HUD"]
+[node name="Stage" type="Label" parent="HUD"]
 offset_left = 24.0
 offset_top = 68.0
 offset_right = 320.0
-offset_bottom = 112.0
-theme_override_font_sizes/font_size = 28
-text = "●●●"
-
-[node name="Stage" type="Label" parent="HUD"]
-offset_left = 24.0
-offset_top = 112.0
-offset_right = 320.0
-offset_bottom = 152.0
+offset_bottom = 108.0
 text = "판 -"
 
 [node name="Version" type="Label" parent="HUD"]
