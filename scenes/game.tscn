@@ -37,6 +37,7 @@ offset_bottom = 108.0
 text = "판 -"
 
 [node name="TitleScreen" type="ColorRect" parent="HUD"]
+mouse_filter = 2
 anchor_right = 1.0
 anchor_bottom = 1.0
 color = Color(0.05, 0.05, 0.08, 0.88)
