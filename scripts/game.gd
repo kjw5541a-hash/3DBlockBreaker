@@ -103,9 +103,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		var t := event as InputEventScreenTouch
 		if t.pressed:
 			_target = screen_to_board(t.position)
-		else:
+		elif field.attached:
 			# 손가락을 뗄 때 붙어 있던 공을 그때의 스윙 속도로 쏜다.
 			field.launch(field.paddle.vel)
+		else:
+			# 공이 이미 날아가는 중이면 같은 탭 제스처가 레이저를 쏜다
+			# (L 이 없거나 쿨다운 중이면 fire_laser() 안에서 조용히 무시된다).
+			field.fire_laser()
 
 # 판이 기울어져 있으므로 화면 좌표를 그대로 쓸 수 없다. 카메라 광선을
 # 판 평면과 교차시킨다. 손가락 밑에 패들이 정확히 오는 감각이 전부

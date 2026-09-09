@@ -10,8 +10,14 @@ var _brick_kinds: Dictionary = {}
 var _ball: MeshInstance3D
 var _paddle: MeshInstance3D
 var _walls: Array[MeshInstance3D] = []
-# 떨어지는 아이템 메시. 판당 3 개뿐이라 개수가 바뀔 때만 만들고 지운다.
+# 떨어지는 아이템 메시. 풀이라 한 번 만든 메시는 안 지우고 숨겼다 재쓴다 —
+# 아이템이 뜰 때마다 Label3D/Material 을 새로 만들면 첫 렌더에서 글리프
+# 래스터화·셰이더 컴파일이 걸려 프레임이 잠깐 멎는다.
 var _items: Array[MeshInstance3D] = []
+var _items_active: int = 0
+# 레이저 볼트. 아이템과 같은 풀 방식.
+var _lasers: Array[MeshInstance3D] = []
+var _lasers_active: int = 0
 
 # 순수 시각값. 물리는 여전히 (u, v) 평면의 선분 하나로 튕긴다. 안쪽 면이
 # 정확히 판 경계에 오도록 바깥으로만 두께를 준다 — 벽이 공을 먹는 것처럼
@@ -177,28 +183,61 @@ func _make_brick_fragment(color: Color, brick_h: float) -> MeshInstance3D:
 	return m
 
 func item_count() -> int:
-	return _items.size()
+	return _items_active
 
-# 아이템과 메시를 인덱스로만 맞춘다.
+# 아이템과 메시를 인덱스로만 맞춘다. 개수가 줄어도 메시는 지우지 않고
+# 숨기기만 한다 — 풀은 이번 실행에서 본 최대 동시 개수까지만 자라고 그
+# 뒤로는 재사용된다.
 #
-# ponytail: 신원을 붙이지 않는다 — 지금은 종류가 P 하나뿐이라 어느 메시가
-# 어느 아이템인지 눈으로 구별되지 않는다. 4b 에서 종류가 늘면 가운데 것을
-# 먹었을 때 남은 둘의 색이 서로 바뀌어 보일 수 있으므로 그때 붙일 것.
+# ponytail: 신원을 붙이지 않는다 — 가운데 것을 먹었을 때 남은 둘의 색이
+# 서로 바뀌어 보일 수 있지만, 색/글자를 매 sync 마다 다시 칠하므로 정확성
+# 문제는 아니다. 눈에 띄면 그때 붙일 것.
 func sync_items(field: PlayField) -> void:
 	while _items.size() < field.items.size():
 		var m := _make_item()
 		_items.append(m)
 		add_child(m)
-	while _items.size() > field.items.size():
-		_items.pop_back().free()
+	_items_active = field.items.size()
+	for i in _items.size():
+		_items[i].visible = i < _items_active
 	for i in field.items.size():
 		var it := field.items[i]
 		_items[i].position = board_to_local(it["pos"] as Vector2, Tuning.ITEM_HALF_SIZE)
-		var color := Item.color(int(it["kind"]))
+		var kind := int(it["kind"])
+		var color := Item.color(kind)
 		var mat := _items[i].material_override as StandardMaterial3D
 		mat.albedo_color = color
 		# 블럭 사이로 떨어질 때 배경에 묻히지 않게 스스로 빛난다.
 		mat.emission = color * 0.5
+		(_items[i].get_node("Label") as Label3D).text = Item.letter(kind)
+
+func laser_count() -> int:
+	return _lasers_active
+
+func sync_lasers(field: PlayField) -> void:
+	while _lasers.size() < field.lasers.size():
+		var m := _make_laser()
+		_lasers.append(m)
+		add_child(m)
+	_lasers_active = field.lasers.size()
+	for i in _lasers.size():
+		_lasers[i].visible = i < _lasers_active
+	for i in field.lasers.size():
+		_lasers[i].position = board_to_local(field.lasers[i], Tuning.LASER_HALF_SIZE)
+
+func _make_laser() -> MeshInstance3D:
+	var h := Tuning.LASER_HALF_SIZE
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(h * 2.0, h * 6.0, h * 2.0)
+	var m := MeshInstance3D.new()
+	m.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Item.color(Item.L)
+	mat.emission_enabled = true
+	mat.emission = Item.color(Item.L)
+	m.material_override = mat
+	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return m
 
 func _make_item() -> MeshInstance3D:
 	var h := Tuning.ITEM_HALF_SIZE
@@ -210,15 +249,27 @@ func _make_item() -> MeshInstance3D:
 	mat.emission_enabled = true
 	m.material_override = mat
 	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var label := Label3D.new()
+	label.name = "Label"
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	label.font_size = 64
+	label.pixel_size = h * 0.02
+	label.position = Vector3(0.0, h * 0.7, 0.0)
+	m.add_child(label)
 	return m
 
 func sync(field: PlayField) -> void:
 	refresh_bricks(field.grid)
 	sync_items(field)
+	sync_lasers(field)
 	_ball.position = board_to_local(field.ball_pos, Tuning.BALL_RADIUS)
 	_paddle.position = board_to_local(field.paddle.pos, Tuning.PADDLE_THICKNESS * 0.5)
 	# 기울기를 눈에 보이게 한다. 법선과 같은 부호 규약을 쓴다.
 	_paddle.rotation = Vector3(0.0, 0.0, -deg_to_rad(field.paddle.tilt_deg))
+	# Enlarge 로 반폭이 바뀌면 메시도 따라간다 — 안 그러면 판정 상자와
+	# 눈에 보이는 크기가 어긋난다.
+	(_paddle.mesh as BoxMesh).size.x = field.paddle.half_width * 2.0
 
 func _make_brick(col: int, row: int, kind: int) -> MeshInstance3D:
 	var rect := BrickGrid.cell_rect(col, row)

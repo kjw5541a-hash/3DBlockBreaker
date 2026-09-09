@@ -7,6 +7,7 @@ func _initialize() -> void:
 	_test_no_gap_is_wider_than_the_curve_allows()
 	_test_levers_arrive_on_schedule()
 	_test_every_stage_carries_exactly_the_promised_items()
+	_test_item_kinds_are_valid_and_varied()
 	print("test_stage_gen: OK")
 	quit()
 
@@ -118,3 +119,19 @@ func _test_every_stage_carries_exactly_the_promised_items() -> void:
 		"같은 판이 다른 아이템 자리를 냈다")
 	assert(StageGen.stage(7).item_cells != StageGen.stage(8).item_cells,
 		"판이 달라도 아이템 자리가 같다 — 시드가 안 먹었다")
+
+# 지금 구현된 종류(P/E/S/C)만 나와야 하고, 101 판이면 통계적으로 최소
+# 두 종류 이상은 섞여야 한다 — 한 종류만 계속 나오면 가중치 뽑기가 아니라
+# 예전처럼 P 고정 코드가 남아 있다는 뜻이다.
+func _test_item_kinds_are_valid_and_varied() -> void:
+	var valid := [Item.P, Item.E, Item.S, Item.C, Item.L]
+	var seen := {}
+	for index in 101:
+		var g := StageGen.stage(index)
+		for kind in g.item_cells:
+			if kind == Item.NONE:
+				continue
+			assert(kind in valid, "알 수 없는 아이템 종류가 나왔다: %d" % kind)
+			seen[kind] = true
+	assert(seen.size() >= 2,
+		"101 판을 돌려도 아이템 종류가 %d 가지뿐이다 — 가중치 뽑기가 안 도는 것 같다" % seen.size())

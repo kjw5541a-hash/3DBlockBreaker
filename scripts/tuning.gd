@@ -61,6 +61,18 @@ const ITEM_FALL_SPEED := 4.0
 # 획득 판정 상자의 반폭. 패들 반폭(0.64)보다 한참 작아야 아이템 가장자리를
 # 스쳤는데 먹히는 일이 없다.
 const ITEM_HALF_SIZE := 0.26
+# Enlarge 배율. 패들 반폭에 곱한다.
+const ITEM_ENLARGE_MULT := 1.5
+# Slow 가 공 물리에 매기는 시간 배율. elapsed(속도 램프)는 대상이 아니다 —
+# 늦추면 난이도 진행까지 함께 얼어 이중으로 느려진다.
+const ITEM_SLOW_TIMESCALE := 0.7
+
+# --- Laser (아이템 L) ---
+const LASER_SPEED := 20.0
+# 연타로 화면을 레이저로 도배하는 것을 막는다.
+const LASER_COOLDOWN := 0.25
+# 충돌 판정 반경. 얇은 볼트라 공(0.18)보다 훨씬 작다.
+const LASER_HALF_SIZE := 0.05
 
 # 탭 발사 속도. 숫자가 아니라 계약이다: 패들 밴드 아래끝에서 출발해 최하단
 # 블럭 줄에 닿는 속도. 리터럴로 박으면 위 값을 조정할 때 계약이 조용히
