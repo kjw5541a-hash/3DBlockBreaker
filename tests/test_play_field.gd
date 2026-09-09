@@ -28,7 +28,7 @@ func _initialize() -> void:
 	_test_catch_attaches_the_ball_at_the_contact_point()
 	_test_caught_ball_launches_normally()
 	_test_new_active_item_replaces_the_previous_one()
-	_test_losing_a_life_keeps_the_active_item()
+	_test_losing_a_life_clears_the_active_item()
 	_test_next_stage_clears_the_active_item()
 	_test_firing_a_laser_requires_the_active_item()
 	_test_laser_respects_its_cooldown()
@@ -605,7 +605,7 @@ func _test_new_active_item_replaces_the_previous_one() -> void:
 	f._apply_item(Item.S)
 	assert(f.active_item == Item.S, "새 아이템을 먹었는데 이전 것이 안 풀렸다: %d" % f.active_item)
 
-func _test_losing_a_life_keeps_the_active_item() -> void:
+func _test_losing_a_life_clears_the_active_item() -> void:
 	var f := PlayField.new()
 	f.grid.fill_all(0)
 	f.attached = false
@@ -618,8 +618,8 @@ func _test_losing_a_life_keeps_the_active_item() -> void:
 			lost = true
 			break
 	assert(lost, "공이 데드존으로 나갔는데 lost 가 아니다 — 테스트가 헛돈다")
-	assert(f.active_item == Item.E,
-		"목숨을 잃었는데 활성 아이템이 풀렸다: %d" % f.active_item)
+	assert(f.active_item == Item.NONE,
+		"목숨을 잃었는데 활성 아이템이 안 풀렸다: %d" % f.active_item)
 
 func _test_next_stage_clears_the_active_item() -> void:
 	var f := PlayField.new()

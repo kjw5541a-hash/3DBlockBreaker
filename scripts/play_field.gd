@@ -27,8 +27,8 @@ var _last_damaged: int = -1
 var items: Array[Dictionary] = []
 # 지금 켜져 있는 지속 효과(E/S/C/L). 한 번에 하나뿐이라 새로 먹으면 그냥
 # 덮어쓴다 — 이전 효과를 끄는 별도 로직이 없다(같은 종류를 다시 먹어도
-# 그냥 같은 값으로 덮어써 자연히 중복 획득이 된다). 판 클리어 때만 NONE 으로
-# 되돌린다(설계 결정: 목숨을 잃어도 안 풀린다).
+# 그냥 같은 값으로 덮어써 자연히 중복 획득이 된다). 목숨을 잃을 때와 판
+# 클리어 때 둘 다 NONE 으로 되돌린다.
 var active_item: int = Item.NONE
 # Catch 로 붙었을 때 접촉점의 u 오프셋. 패들 중앙이 아니라 닿은 자리 그대로
 # 따라가야 자연스럽다. 일반 부착(_attach)은 0 이라 같은 필드로 통일한다.
@@ -192,6 +192,7 @@ func step(target: Vector2, dt: float) -> Dictionary:
 		if ball_pos.y < 0.0:
 			lives -= 1
 			out["lost"] = true
+			active_item = Item.NONE
 			_spawn_dropping()
 			break
 
