@@ -25,9 +25,10 @@ var _last_damaged: int = -1
 # 지금 떨어지는 중인 아이템들. 원소는 {"pos": Vector2, "kind": int} 다.
 # 개수가 판당 3 개라 배열 순회로 충분하다.
 var items: Array[Dictionary] = []
-# 지금 켜져 있는 지속 효과(E/S/C). 한 번에 하나뿐이라 새로 먹으면 그냥
-# 덮어쓴다 — 이전 효과를 끄는 별도 로직이 없다. 목숨을 잃을 때만 NONE 으로
-# 되돌린다(설계 결정: 판 클리어로는 안 풀린다).
+# 지금 켜져 있는 지속 효과(E/S/C/L). 한 번에 하나뿐이라 새로 먹으면 그냥
+# 덮어쓴다 — 이전 효과를 끄는 별도 로직이 없다(같은 종류를 다시 먹어도
+# 그냥 같은 값으로 덮어써 자연히 중복 획득이 된다). 판 클리어 때만 NONE 으로
+# 되돌린다(설계 결정: 목숨을 잃어도 안 풀린다).
 var active_item: int = Item.NONE
 # Catch 로 붙었을 때 접촉점의 u 오프셋. 패들 중앙이 아니라 닿은 자리 그대로
 # 따라가야 자연스럽다. 일반 부착(_attach)은 0 이라 같은 필드로 통일한다.
@@ -191,8 +192,6 @@ func step(target: Vector2, dt: float) -> Dictionary:
 		if ball_pos.y < 0.0:
 			lives -= 1
 			out["lost"] = true
-			# 결정: 지속 효과는 목숨을 잃을 때만 풀린다(판 클리어로는 안 풀림).
-			active_item = Item.NONE
 			_spawn_dropping()
 			break
 
@@ -281,6 +280,8 @@ func next_stage() -> void:
 	# 지난 판의 아이템이 새 판 하늘에서 계속 떨어지면 어느 판의 것인지 알 수 없다.
 	items.clear()
 	lasers.clear()
+	# 결정: 지속 효과는 판 클리어 때 풀린다(목숨을 잃어도 안 풀림).
+	active_item = Item.NONE
 	_attach()
 
 # 전멸. 여기서만 램프가 0 으로 돌아간다. 이것도 공을 잃은 것이므로
@@ -292,4 +293,5 @@ func reset_run() -> void:
 	grid = StageGen.stage(stage_index)
 	items.clear()
 	lasers.clear()
+	active_item = Item.NONE
 	_spawn_dropping()
