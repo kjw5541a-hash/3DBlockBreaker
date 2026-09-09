@@ -154,9 +154,13 @@ func _test_item_meshes_follow_the_field() -> void:
 	assert(view.item_count() == 0, "아이템이 없는데 메시가 있다: %d" % view.item_count())
 
 	f.items.append({"pos": Vector2(1.0, 6.0), "kind": Item.P})
-	f.items.append({"pos": Vector2(-2.0, 4.0), "kind": Item.P})
+	f.items.append({"pos": Vector2(-2.0, 4.0), "kind": Item.E})
 	view.sync_items(f)
 	assert(view.item_count() == 2, "아이템 둘인데 메시가 %d 개다" % view.item_count())
+	assert((view._items[0].get_node("Label") as Label3D).text == "P",
+		"P 큐브에 글자 P 가 안 붙었다")
+	assert((view._items[1].get_node("Label") as Label3D).text == "E",
+		"E 큐브에 글자 E 가 안 붙었다")
 
 	f.items.remove_at(0)
 	view.sync_items(f)

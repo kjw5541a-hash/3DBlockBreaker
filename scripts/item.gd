@@ -26,3 +26,15 @@ static func color(kind: int) -> Color:
 	if kind == C:
 		return Color(0.9, 0.4, 0.85)
 	return Color(0.7, 0.7, 0.7)
+
+# 색만으로는 종류를 못 외운다. 큐브 위에 이 글자를 띄운다.
+static func letter(kind: int) -> String:
+	if kind == P:
+		return "P"
+	if kind == E:
+		return "E"
+	if kind == S:
+		return "S"
+	if kind == C:
+		return "C"
+	return "?"

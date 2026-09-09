@@ -194,11 +194,13 @@ func sync_items(field: PlayField) -> void:
 	for i in field.items.size():
 		var it := field.items[i]
 		_items[i].position = board_to_local(it["pos"] as Vector2, Tuning.ITEM_HALF_SIZE)
-		var color := Item.color(int(it["kind"]))
+		var kind := int(it["kind"])
+		var color := Item.color(kind)
 		var mat := _items[i].material_override as StandardMaterial3D
 		mat.albedo_color = color
 		# 블럭 사이로 떨어질 때 배경에 묻히지 않게 스스로 빛난다.
 		mat.emission = color * 0.5
+		(_items[i].get_node("Label") as Label3D).text = Item.letter(kind)
 
 func _make_item() -> MeshInstance3D:
 	var h := Tuning.ITEM_HALF_SIZE
@@ -210,6 +212,14 @@ func _make_item() -> MeshInstance3D:
 	mat.emission_enabled = true
 	m.material_override = mat
 	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var label := Label3D.new()
+	label.name = "Label"
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	label.font_size = 64
+	label.pixel_size = h * 0.02
+	label.position = Vector3(0.0, h * 0.7, 0.0)
+	m.add_child(label)
 	return m
 
 func sync(field: PlayField) -> void:
