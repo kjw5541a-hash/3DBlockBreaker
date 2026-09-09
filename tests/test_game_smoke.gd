@@ -31,8 +31,14 @@ func _test_scene_loads_and_runs() -> void:
 	# 충분하다.
 	g._ready()
 	# 쏘지 않으면 field.step() 이 attached 경로로 조기 반환해 240 프레임을
-	# 돌려도 물리가 한 번도 안 돈다 — 단언이 자명 참이 된다.
-	g.field.launch(Vector2(6.0, 0.0))
+	# 돌려도 물리가 한 번도 안 돈다 — 단언이 자명 참이 된다. 새 조작대로
+	# 끌어내렸다 놓아 올라오는 패들이 공을 치게 한다.
+	g._target = Vector2(0.0, Tuning.PADDLE_BAND_MIN_V)
+	for i in 40:
+		g.step_once(1.0 / 120.0)
+	g._target.y = Tuning.PADDLE_BAND_MAX_V
+	g.field.paddle.start_spring()
+	g.field.release_ball()
 	# 물리 스텝을 손으로 돌린다. 헤드리스에는 _physics_process 가
 	# 돌아갈 프레임 루프가 없다.
 	for i in 240:

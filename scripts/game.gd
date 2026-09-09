@@ -102,14 +102,21 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventScreenTouch:
 		var t := event as InputEventScreenTouch
 		if t.pressed:
+			# 다시 잡으면 올라가던 패들을 손가락이 도로 가져간다.
+			field.paddle.cancel_spring()
 			_target = screen_to_board(t.position)
-		elif field.attached:
-			# 손가락을 뗄 때 붙어 있던 공을 그때의 스윙 속도로 쏜다.
-			field.launch(field.paddle.vel)
 		else:
-			# 공이 이미 날아가는 중이면 같은 탭 제스처가 레이저를 쏜다
-			# (L 이 없거나 쿨다운 중이면 fire_laser() 안에서 조용히 무시된다).
-			field.fire_laser()
+			# 손을 뗀다 = 스프링. 손가락이 아직 아래를 가리키고 있으므로
+			# 타깃도 홈으로 올려 둔다 — 안 그러면 다 올라간 뒤 도로 내려간다.
+			_target.y = Tuning.PADDLE_BAND_MAX_V
+			field.paddle.start_spring()
+			if field.attached:
+				# 발사 속도는 여기서 안 준다. 올라오는 패들이 실제로 쳐서 만든다.
+				field.release_ball()
+			else:
+				# 공이 이미 날아가는 중이면 같은 탭 제스처가 레이저를 쏜다
+				# (L 이 없거나 쿨다운 중이면 fire_laser() 안에서 조용히 무시된다).
+				field.fire_laser()
 
 # 판이 기울어져 있으므로 화면 좌표를 그대로 쓸 수 없다. 카메라 광선을
 # 판 평면과 교차시킨다. 손가락 밑에 패들이 정확히 오는 감각이 전부

@@ -68,7 +68,10 @@ static func paddle_bounce(v_in: Vector2, normal: Vector2, paddle_vel: Vector2,
 		return v_in
 	var out := reflect(v_in, normal) * Tuning.PADDLE_RESTITUTION
 	out += paddle_vel * Tuning.PADDLE_SPEED_TRANSFER
-	# 하한 없음. 가만히 받으면 반발계수만큼 계속 느려지고 도달 높이가
-	# 낮아진다 — 결국 공이 패들 위로 가라앉는다. 다시 띄우려면 스윙해야 한다.
-	out = clamp_speed(out, 0.0, v_max)
+	# 공은 자기를 친 패들보다 느리게 떠나지 않는다. 스프링 복귀가 정지한
+	# 공을 칠 때 transfer(0.6)만으로는 공이 반드시 패들보다 느려지고, 그러면
+	# 패들이 곧바로 공을 추월해 메시를 뚫고 지나간다. 일반 랠리에서는 반사
+	# 성분이 훨씬 커서 이 하한이 걸리지 않는다 — 가만히 받으면 반발계수만큼
+	# 계속 느려지고 결국 공이 패들 위로 가라앉는다는 성질은 그대로다.
+	out = clamp_speed(out, maxf(paddle_vel.y, 0.0), v_max)
 	return enforce_min_angle(out, Tuning.MIN_ANGLE_DEG)

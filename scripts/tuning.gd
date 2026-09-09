@@ -52,6 +52,20 @@ const PADDLE_TILT_FULL_SPEED := 25.0
 const CONTACT_ANGLE_MAX_DEG := 20.0
 const PADDLE_VEL_SMOOTH_FRAMES := 3
 
+# --- 스프링 복귀 ---
+# 패들의 기본 위치는 밴드 위끝이다. 손가락으로 끌어내렸다 놓으면 홈으로
+# 등속 상승하고, 그 도중에 공을 실제로 쳐서 발사가 만들어진다.
+#
+# 속도가 당긴 깊이에 비례하는 것이 이 조작의 전부다. 크기까지 매번 같으면
+# 깊게 당길수록 더 낮은 곳에서 같은 속도로 쏘게 되어 당기는 것이 순손해가
+# 된다 — 플레이어 직관과 정반대가 된다.
+#
+# MAX 는 V_MAX_START 를 넘으면 안 된다. 공은 자기를 친 패들보다 느리게
+# 떠나지 않지만(paddle_bounce 의 하한) 그 속도가 v_max 에 잘리므로, 복귀가
+# 더 빠르면 패들이 공을 추월해 메시를 뚫고 지나간다.
+const PADDLE_RETURN_SPEED_MIN := 6.0
+const PADDLE_RETURN_SPEED_MAX := 20.0
+
 const LIVES := 3
 
 # --- 아이템 ---

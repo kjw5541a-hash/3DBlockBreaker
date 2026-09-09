@@ -67,17 +67,15 @@ func _spawn_dropping() -> void:
 		paddle.pos.y + Tuning.PADDLE_THICKNESS * 0.5 + Tuning.BALL_RADIUS + DROP_HEIGHT)
 	_last_damaged = -1
 
-# 붙어 있는 공을 스윙 속도로 쏜다. 탭만 하면(스윙 0) 하한으로 수직
-# 발사한다. 첫 입력부터 스윙 문법을 가르치므로 튜토리얼이 필요 없다.
-func launch(swing: Vector2) -> void:
+# 붙어 있는 공을 놓는다. 속도를 안 주는 것이 핵심이다 — 발사는 여기서
+# 계산하지 않고, 홈으로 튕겨 올라가는 패들이 실제로 공을 쳐서 만든다.
+# 그래서 파워는 당긴 깊이가, 각도는 공이 패들 위 어디에 얹혀 있었는지가
+# 정한다(contact_normal 의 접촉점 오프셋).
+func release_ball() -> void:
 	if not attached:
 		return
 	attached = false
-	ball_vel = BallPhysics.enforce_min_angle(
-		BallPhysics.clamp_speed(
-			Vector2(0.0, Tuning.v_min()) + swing * Tuning.PADDLE_SPEED_TRANSFER,
-			Tuning.v_min(), Tuning.v_max_at(elapsed)),
-		Tuning.MIN_ANGLE_DEG)
+	ball_vel = Vector2.ZERO
 
 # L 이 활성이고 쿨다운이 끝났을 때만 한 발 나간다. 연타로 화면을 볼트로
 # 도배하는 것을 쿨다운이 막는다.
@@ -166,7 +164,9 @@ func step(target: Vector2, dt: float) -> Dictionary:
 			_last_damaged = -1
 
 		if not out["paddle_hit"] and _touches_paddle():
-			if active_item == Item.C:
+			# 스프링으로 올라오는 중에는 안 잡는다. 놓은 공은 아직 패들 위에
+			# 얹혀 있어서, 여기서 다시 잡으면 C 를 든 동안 영영 발사가 안 된다.
+			if active_item == Item.C and not paddle.springing():
 				# 튕기는 대신 그 자리에 붙는다. attach() 를 안 쓰는 것은 offset 을
 				# 접촉점으로 잡아야 해서다 — 중앙으로 스냅하면 손맛이 부자연스럽다.
 				out["paddle_hit"] = true

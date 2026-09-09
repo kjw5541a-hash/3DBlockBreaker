@@ -137,9 +137,7 @@ static func _place_indestructible(g: BrickGrid, rng: RandomNumberGenerator,
 # 일부가 아니라 그 위에 얹힌 보상이라 대칭이 깨져도 판이 잡음으로 안 보인다.
 # 종류별 가중치. 설계 문서(phase2)의 원 비중(P5 E22 S20 C18 L15)을 그대로
 # 옮겼다 — B 는 아이템 세트에서 뺐고, D 는 별도 설계에서 합류한다.
-# C(Catch)는 놓을 때 발사 속도가 안 붙는 버그가 있어 일단 스폰에서 뺐다 —
-# _apply_item/step() 의 캐치 로직 자체는 그대로 둬서 고치면 바로 되살아난다.
-const _ITEM_WEIGHTS := {Item.P: 5, Item.E: 22, Item.S: 20, Item.L: 15}
+const _ITEM_WEIGHTS := {Item.P: 5, Item.E: 22, Item.S: 20, Item.C: 18, Item.L: 15}
 
 static func _place_items(g: BrickGrid, rng: RandomNumberGenerator, count: int) -> void:
 	var spots: Array[int] = []

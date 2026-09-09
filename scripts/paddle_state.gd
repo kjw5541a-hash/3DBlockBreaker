@@ -8,10 +8,31 @@ var tilt_deg: float = 0.0
 var half_width: float = Tuning.PADDLE_HALF_WIDTH
 
 var _vel_samples: Array[Vector2] = []
+# 0 이면 스프링 중이 아니다. 스프링 중에는 타깃을 무시하고 이 속도로
+# 등속 상승한다.
+var _spring_speed: float = 0.0
 
 func _init(start_u: float = 0.0) -> void:
-	pos = Vector2(start_u, Tuning.PADDLE_BAND_MIN_V)
+	pos = Vector2(start_u, Tuning.PADDLE_BAND_MAX_V)
 	prev_pos = pos
+
+func springing() -> bool:
+	return _spring_speed > 0.0
+
+# 손을 뗀 순간 부른다. 당긴 깊이가 곧 복귀 속도이고, 복귀 속도가 곧
+# 발사 파워다 — 올라오는 패들이 공을 쳐서 쏘기 때문이다.
+func start_spring() -> void:
+	var span := Tuning.PADDLE_BAND_MAX_V - Tuning.PADDLE_BAND_MIN_V
+	var t := clampf((Tuning.PADDLE_BAND_MAX_V - pos.y) / span, 0.0, 1.0)
+	_spring_speed = lerpf(Tuning.PADDLE_RETURN_SPEED_MIN,
+		Tuning.PADDLE_RETURN_SPEED_MAX, t)
+	# 평활 표본에는 손가락을 끌어내리던 아래 방향 속도가 들어 있다. 그대로
+	# 두면 릴리즈 직후 한두 프레임 동안 평균이 파워를 깎거나 부호를 뒤집는데,
+	# 공은 바로 그 프레임에 맞는다 — 평균이 따라잡을 시간이 없다.
+	_vel_samples.clear()
+
+func cancel_spring() -> void:
+	_spring_speed = 0.0
 
 # 목표(손가락)를 향해 축별 최대속도로 추종한다. 순간이동을 허용하면
 # 패들 속도가 무한대로 튀어 공에 비정상적인 힘이 실리고, 텔레포트가
@@ -25,7 +46,14 @@ func update(target: Vector2, dt: float) -> void:
 		clampf(target.y, Tuning.PADDLE_BAND_MIN_V, Tuning.PADDLE_BAND_MAX_V))
 	var d := goal - pos
 	pos.x += clampf(d.x, -Tuning.PADDLE_MAX_SPEED_U * dt, Tuning.PADDLE_MAX_SPEED_U * dt)
-	pos.y += clampf(d.y, -Tuning.PADDLE_MAX_SPEED_V * dt, Tuning.PADDLE_MAX_SPEED_V * dt)
+	if _spring_speed > 0.0:
+		# 스프링 중에는 세로 타깃을 무시한다 — 손가락은 아직 아래를 가리키고
+		# 있고, 그쪽으로 추종하면 튕겨 오르지 못한다. 가로는 그대로 둔다.
+		pos.y = minf(pos.y + _spring_speed * dt, Tuning.PADDLE_BAND_MAX_V)
+		if pos.y >= Tuning.PADDLE_BAND_MAX_V:
+			_spring_speed = 0.0
+	else:
+		pos.y += clampf(d.y, -Tuning.PADDLE_MAX_SPEED_V * dt, Tuning.PADDLE_MAX_SPEED_V * dt)
 	_push_vel((pos - prev_pos) / dt)
 	tilt_deg = clampf(
 		vel.x / Tuning.PADDLE_TILT_FULL_SPEED * Tuning.PADDLE_MAX_TILT_DEG,
