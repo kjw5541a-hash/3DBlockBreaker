@@ -124,7 +124,7 @@ func _test_every_stage_carries_exactly_the_promised_items() -> void:
 # 두 종류 이상은 섞여야 한다 — 한 종류만 계속 나오면 가중치 뽑기가 아니라
 # 예전처럼 P 고정 코드가 남아 있다는 뜻이다.
 func _test_item_kinds_are_valid_and_varied() -> void:
-	var valid := [Item.P, Item.E, Item.S, Item.C]
+	var valid := [Item.P, Item.E, Item.S, Item.C, Item.L]
 	var seen := {}
 	for index in 101:
 		var g := StageGen.stage(index)

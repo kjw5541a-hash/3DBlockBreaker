@@ -12,6 +12,8 @@ var _paddle: MeshInstance3D
 var _walls: Array[MeshInstance3D] = []
 # 떨어지는 아이템 메시. 판당 3 개뿐이라 개수가 바뀔 때만 만들고 지운다.
 var _items: Array[MeshInstance3D] = []
+# 레이저 볼트. 아이템처럼 개수가 바뀔 때만 만들고 지운다.
+var _lasers: Array[MeshInstance3D] = []
 
 # 순수 시각값. 물리는 여전히 (u, v) 평면의 선분 하나로 튕긴다. 안쪽 면이
 # 정확히 판 경계에 오도록 바깥으로만 두께를 준다 — 벽이 공을 먹는 것처럼
@@ -202,6 +204,33 @@ func sync_items(field: PlayField) -> void:
 		mat.emission = color * 0.5
 		(_items[i].get_node("Label") as Label3D).text = Item.letter(kind)
 
+func laser_count() -> int:
+	return _lasers.size()
+
+func sync_lasers(field: PlayField) -> void:
+	while _lasers.size() < field.lasers.size():
+		var m := _make_laser()
+		_lasers.append(m)
+		add_child(m)
+	while _lasers.size() > field.lasers.size():
+		_lasers.pop_back().free()
+	for i in field.lasers.size():
+		_lasers[i].position = board_to_local(field.lasers[i], Tuning.LASER_HALF_SIZE)
+
+func _make_laser() -> MeshInstance3D:
+	var h := Tuning.LASER_HALF_SIZE
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(h * 2.0, h * 6.0, h * 2.0)
+	var m := MeshInstance3D.new()
+	m.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Item.color(Item.L)
+	mat.emission_enabled = true
+	mat.emission = Item.color(Item.L)
+	m.material_override = mat
+	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return m
+
 func _make_item() -> MeshInstance3D:
 	var h := Tuning.ITEM_HALF_SIZE
 	var mesh := BoxMesh.new()
@@ -225,6 +254,7 @@ func _make_item() -> MeshInstance3D:
 func sync(field: PlayField) -> void:
 	refresh_bricks(field.grid)
 	sync_items(field)
+	sync_lasers(field)
 	_ball.position = board_to_local(field.ball_pos, Tuning.BALL_RADIUS)
 	_paddle.position = board_to_local(field.paddle.pos, Tuning.PADDLE_THICKNESS * 0.5)
 	# 기울기를 눈에 보이게 한다. 법선과 같은 부호 규약을 쓴다.

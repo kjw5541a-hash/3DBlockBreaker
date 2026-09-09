@@ -29,6 +29,11 @@ func _initialize() -> void:
 	_test_caught_ball_launches_normally()
 	_test_new_active_item_replaces_the_previous_one()
 	_test_losing_a_life_clears_the_active_item()
+	_test_firing_a_laser_requires_the_active_item()
+	_test_laser_respects_its_cooldown()
+	_test_laser_travels_at_a_constant_speed()
+	_test_laser_breaks_a_brick_and_is_consumed()
+	_test_laser_disappears_past_the_top_wall()
 	print("test_play_field: OK")
 	quit()
 
@@ -614,3 +619,56 @@ func _test_losing_a_life_clears_the_active_item() -> void:
 	assert(lost, "공이 데드존으로 나갔는데 lost 가 아니다 — 테스트가 헛돈다")
 	assert(f.active_item == Item.NONE,
 		"목숨을 잃었는데 활성 아이템이 안 풀렸다: %d" % f.active_item)
+
+func _test_firing_a_laser_requires_the_active_item() -> void:
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	f.fire_laser()
+	assert(f.lasers.is_empty(), "L 이 없는데 발사됐다")
+	f.active_item = Item.L
+	f.fire_laser()
+	assert(f.lasers.size() == 1, "L 이 활성인데 발사가 안 됐다")
+
+func _test_laser_respects_its_cooldown() -> void:
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	f.active_item = Item.L
+	f.fire_laser()
+	f.fire_laser()
+	assert(f.lasers.size() == 1, "쿨다운 중인데 연달아 발사됐다: %d" % f.lasers.size())
+	for i in 60:
+		f.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), DT)
+	f.fire_laser()
+	assert(f.lasers.size() == 2, "쿨다운이 지났는데도 두 번째 발사가 안 됐다")
+
+func _test_laser_travels_at_a_constant_speed() -> void:
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	f.lasers.append(Vector2(0.0, 5.0))
+	f.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), DT)
+	var expected := 5.0 + Tuning.LASER_SPEED * DT
+	assert(is_equal_approx(f.lasers[0].y, expected),
+		"레이저 속도가 기대와 다르다: %f vs %f" % [f.lasers[0].y, expected])
+
+func _test_laser_breaks_a_brick_and_is_consumed() -> void:
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	f.grid.cells[BrickGrid.index(5, 2)] = 1
+	var rect := BrickGrid.cell_rect(5, 2)
+	var center := rect.position + rect.size * 0.5
+	f.lasers.append(Vector2(center.x, rect.position.y - 0.1))
+	var broke := false
+	for i in 30:
+		var r := f.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), DT)
+		if (r["broken"] as Array).size() > 0:
+			broke = true
+			break
+	assert(broke, "레이저가 블럭을 안 깼다")
+	assert(f.lasers.is_empty(), "블럭을 맞힌 레이저가 안 사라졌다")
+
+func _test_laser_disappears_past_the_top_wall() -> void:
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	f.lasers.append(Vector2(0.0, Tuning.BOARD_TOP_V - 0.05))
+	f.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), DT)
+	assert(f.lasers.is_empty(), "판 위로 나간 레이저가 안 사라졌다")

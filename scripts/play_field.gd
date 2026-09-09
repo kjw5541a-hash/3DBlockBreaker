@@ -33,6 +33,11 @@ var active_item: int = Item.NONE
 # 따라가야 자연스럽다. 일반 부착(_attach)은 0 이라 같은 필드로 통일한다.
 var _attach_offset_u: float = 0.0
 
+# 날아가는 레이저 볼트들. 공과 달리 물리(중력·반사)가 없다 — 직선으로
+# 올라가다 블럭을 맞히거나 판을 벗어나면 사라진다.
+var lasers: Array[Vector2] = []
+var _laser_cooldown: float = 0.0
+
 # 목숨을 잃은 새 공이 떨어져 내리기 시작하는 높이. 패들 바로 위, 눈에
 # 보일 만큼만 띄운다 — 너무 높으면 착지까지 기다리는 게 지루해진다.
 const DROP_HEIGHT := 1.0
@@ -73,6 +78,14 @@ func launch(swing: Vector2) -> void:
 			Tuning.v_min(), Tuning.v_max_at(elapsed)),
 		Tuning.MIN_ANGLE_DEG)
 
+# L 이 활성이고 쿨다운이 끝났을 때만 한 발 나간다. 연타로 화면을 볼트로
+# 도배하는 것을 쿨다운이 막는다.
+func fire_laser() -> void:
+	if active_item != Item.L or _laser_cooldown > 0.0:
+		return
+	lasers.append(paddle.pos + Vector2(0.0, Tuning.PADDLE_THICKNESS * 0.5))
+	_laser_cooldown = Tuning.LASER_COOLDOWN
+
 func step(target: Vector2, dt: float) -> Dictionary:
 	# Enlarge 는 상태를 저장하지 않고 매 프레임 다시 계산한다 — 해제될 때
 	# 되돌리는 로직이 따로 필요 없다.
@@ -83,8 +96,10 @@ func step(target: Vector2, dt: float) -> Dictionary:
 		"items_taken": [], "lost": false, "cleared": false}
 	# 아이템은 공과 독립이다. 공이 발사 전에 붙어 있든 목숨을 잃어 새 공이
 	# 낙하 중이든 화면의 아이템은 계속 내려와야 한다 — 그래서 아래 조기
-	# 반환들보다 앞이다.
+	# 반환들보다 앞이다. 레이저와 쿨다운도 같은 이유로 여기 있다.
 	_update_items(dt, out)
+	_laser_cooldown = maxf(0.0, _laser_cooldown - dt)
+	_update_lasers(dt, out)
 	if attached:
 		ball_pos = paddle.pos + Vector2(_attach_offset_u,
 			Tuning.PADDLE_THICKNESS * 0.5 + Tuning.BALL_RADIUS)
@@ -218,13 +233,34 @@ static func _item_rect(p: Vector2) -> Rect2:
 	var h := Tuning.ITEM_HALF_SIZE
 	return Rect2(p.x - h, p.y - h, h * 2.0, h * 2.0)
 
-# P 는 즉발이라 활성 슬롯을 안 거친다. E/S/C 는 슬롯에 그대로 덮어쓴다 —
+# 물리(반사·감쇠)가 없는 직선 볼트. 블럭에 닿으면 한 대 깎고(살아남아도)
+# 소모돼 사라진다 — 공처럼 튕기며 남지 않는다. 판 위로 나가도 사라진다.
+func _update_lasers(dt: float, out: Dictionary) -> void:
+	var kept: Array[Vector2] = []
+	for p0 in lasers:
+		var p := p0 + Vector2(0.0, Tuning.LASER_SPEED * dt)
+		if p.y > Tuning.BOARD_TOP_V:
+			continue
+		var q := grid.query(p, Tuning.LASER_HALF_SIZE)
+		if q["hit"]:
+			var kind := grid.get_cell(q["col"], q["row"])
+			grid.hit(q["col"], q["row"])
+			if grid.get_cell(q["col"], q["row"]) == 0:
+				(out["broken"] as Array).append(
+					{"col": q["col"], "row": q["row"], "kind": kind})
+				out["bricks_hit"] = (out["broken"] as Array).size()
+				_spawn_item(q["col"], q["row"])
+			continue
+		kept.append(p)
+	lasers = kept
+
+# P 는 즉발이라 활성 슬롯을 안 거친다. E/S/C/L 은 슬롯에 그대로 덮어쓴다 —
 # 이전 것을 끄는 코드가 따로 없는 것은 슬롯이 정수 하나라 새 값이 곧 교체라서다.
-# 나머지(L, B, D)는 4b 나머지 청크에서 붙는다.
+# B 는 스코프에서 뺐고, D 는 별도 설계에서 붙는다.
 func _apply_item(kind: int) -> void:
 	if kind == Item.P:
 		lives += 1
-	elif kind == Item.E or kind == Item.S or kind == Item.C:
+	elif kind == Item.E or kind == Item.S or kind == Item.C or kind == Item.L:
 		active_item = kind
 
 # 공 원이 패들의 스윕 상자에 닿았는지. 상자가 축정렬이라 가장 가까운
@@ -244,6 +280,7 @@ func next_stage() -> void:
 	grid = StageGen.stage(stage_index)
 	# 지난 판의 아이템이 새 판 하늘에서 계속 떨어지면 어느 판의 것인지 알 수 없다.
 	items.clear()
+	lasers.clear()
 	_attach()
 
 # 전멸. 여기서만 램프가 0 으로 돌아간다. 이것도 공을 잃은 것이므로
@@ -254,4 +291,5 @@ func reset_run() -> void:
 	stage_index = 0
 	grid = StageGen.stage(stage_index)
 	items.clear()
+	lasers.clear()
 	_spawn_dropping()

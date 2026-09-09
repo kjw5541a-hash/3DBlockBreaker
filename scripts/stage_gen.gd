@@ -135,9 +135,9 @@ static func _place_indestructible(g: BrickGrid, rng: RandomNumberGenerator,
 # 불괴 블럭과 달리 좌우 대칭으로 놓지 않는다. 여기서는 개수 보장이 대칭보다
 # 우선이다 — 쌍으로 놓으면 홀수 개를 정확히 맞출 수 없다. 아이템은 배치의
 # 일부가 아니라 그 위에 얹힌 보상이라 대칭이 깨져도 판이 잡음으로 안 보인다.
-# 종류별 가중치. 설계 문서(phase2)의 원 비중(P5 E22 S20 C18 ...) 중 지금 구현된
-# 넷만 그대로 옮겼다 — L, D, B 가 합류하면 다시 정규화한다.
-const _ITEM_WEIGHTS := {Item.P: 5, Item.E: 22, Item.S: 20, Item.C: 18}
+# 종류별 가중치. 설계 문서(phase2)의 원 비중(P5 E22 S20 C18 L15)을 그대로
+# 옮겼다 — B 는 아이템 세트에서 뺐고, D 는 별도 설계에서 합류한다.
+const _ITEM_WEIGHTS := {Item.P: 5, Item.E: 22, Item.S: 20, Item.C: 18, Item.L: 15}
 
 static func _place_items(g: BrickGrid, rng: RandomNumberGenerator, count: int) -> void:
 	var spots: Array[int] = []

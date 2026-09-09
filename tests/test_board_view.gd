@@ -13,6 +13,7 @@ func _initialize() -> void:
 	_test_brick_break_spawns_fragments()
 	_test_item_meshes_follow_the_field()
 	_test_paddle_mesh_widens_with_enlarge()
+	_test_laser_meshes_follow_the_field()
 	print("test_board_view: OK")
 	quit()
 
@@ -184,4 +185,22 @@ func _test_paddle_mesh_widens_with_enlarge() -> void:
 	var widened_size := (view._paddle.mesh as BoxMesh).size.x
 	assert(widened_size > base_size,
 		"Enlarge 가 활성인데 패들 메시가 그대로다: %f -> %f" % [base_size, widened_size])
+	view.free()
+
+func _test_laser_meshes_follow_the_field() -> void:
+	var view := BoardView.new()
+	root.add_child(view)
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	view.build(f.grid)
+	assert(view.laser_count() == 0, "레이저가 없는데 메시가 있다: %d" % view.laser_count())
+
+	f.lasers.append(Vector2(1.0, 6.0))
+	f.lasers.append(Vector2(-2.0, 4.0))
+	view.sync_lasers(f)
+	assert(view.laser_count() == 2, "레이저 둘인데 메시가 %d 개다" % view.laser_count())
+
+	f.lasers.clear()
+	view.sync_lasers(f)
+	assert(view.laser_count() == 0, "레이저가 다 사라졌는데 메시가 %d 개 남았다" % view.laser_count())
 	view.free()
