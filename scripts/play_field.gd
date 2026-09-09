@@ -25,6 +25,13 @@ var _last_damaged: int = -1
 # 지금 떨어지는 중인 아이템들. 원소는 {"pos": Vector2, "kind": int} 다.
 # 개수가 판당 3 개라 배열 순회로 충분하다.
 var items: Array[Dictionary] = []
+# 지금 켜져 있는 지속 효과(E/S/C). 한 번에 하나뿐이라 새로 먹으면 그냥
+# 덮어쓴다 — 이전 효과를 끄는 별도 로직이 없다. 목숨을 잃을 때만 NONE 으로
+# 되돌린다(설계 결정: 판 클리어로는 안 풀린다).
+var active_item: int = Item.NONE
+# Catch 로 붙었을 때 접촉점의 u 오프셋. 패들 중앙이 아니라 닿은 자리 그대로
+# 따라가야 자연스럽다. 일반 부착(_attach)은 0 이라 같은 필드로 통일한다.
+var _attach_offset_u: float = 0.0
 
 # 목숨을 잃은 새 공이 떨어져 내리기 시작하는 높이. 패들 바로 위, 눈에
 # 보일 만큼만 띄운다 — 너무 높으면 착지까지 기다리는 게 지루해진다.
@@ -39,6 +46,7 @@ func _attach() -> void:
 	attached = true
 	dropping = false
 	ball_vel = Vector2.ZERO
+	_attach_offset_u = 0.0
 	ball_pos = paddle.pos + Vector2(0.0, Tuning.PADDLE_THICKNESS * 0.5 + Tuning.BALL_RADIUS)
 	_last_damaged = -1
 
@@ -66,6 +74,10 @@ func launch(swing: Vector2) -> void:
 		Tuning.MIN_ANGLE_DEG)
 
 func step(target: Vector2, dt: float) -> Dictionary:
+	# Enlarge 는 상태를 저장하지 않고 매 프레임 다시 계산한다 — 해제될 때
+	# 되돌리는 로직이 따로 필요 없다.
+	paddle.half_width = Tuning.PADDLE_HALF_WIDTH * \
+		(Tuning.ITEM_ENLARGE_MULT if active_item == Item.E else 1.0)
 	paddle.update(target, dt)
 	var out := {"paddle_hit": false, "wall_hit": false, "bricks_hit": 0, "broken": [],
 		"items_taken": [], "lost": false, "cleared": false}
@@ -74,7 +86,8 @@ func step(target: Vector2, dt: float) -> Dictionary:
 	# 반환들보다 앞이다.
 	_update_items(dt, out)
 	if attached:
-		ball_pos = paddle.pos + Vector2(0.0, Tuning.PADDLE_THICKNESS * 0.5 + Tuning.BALL_RADIUS)
+		ball_pos = paddle.pos + Vector2(_attach_offset_u,
+			Tuning.PADDLE_THICKNESS * 0.5 + Tuning.BALL_RADIUS)
 		return out
 	if dropping:
 		# x 는 패들을 그대로 따라간다 — 낙하 중에 손가락이 움직여도 헛착지가
@@ -89,10 +102,14 @@ func step(target: Vector2, dt: float) -> Dictionary:
 		return out
 	elapsed += dt
 
+	# Slow 는 공 물리에만 건다. elapsed 는 위에서 이미 실시간으로 더했다 —
+	# 여기서 또 줄이면 속도 램프까지 얼어 이중으로 느려진다. 패들 추종과
+	# 아이템 낙하도 대상이 아니다.
+	var phys_dt := dt * (Tuning.ITEM_SLOW_TIMESCALE if active_item == Item.S else 1.0)
 	# 한 스텝 이동거리가 반지름을 넘지 않도록 쪼갠다. 안 쪼개면 빠른
 	# 공이 얇은 블럭을 그냥 통과한다.
-	var n := BallPhysics.substeps(ball_vel.length(), dt)
-	var sub := dt / float(n)
+	var n := BallPhysics.substeps(ball_vel.length(), phys_dt)
+	var sub := phys_dt / float(n)
 	for s in n:
 		ball_vel = BallPhysics.step_vel(ball_vel, sub)
 		ball_pos = BallPhysics.step_pos(ball_pos, ball_vel, sub)
@@ -133,6 +150,17 @@ func step(target: Vector2, dt: float) -> Dictionary:
 			_last_damaged = -1
 
 		if not out["paddle_hit"] and _touches_paddle():
+			if active_item == Item.C:
+				# 튕기는 대신 그 자리에 붙는다. attach() 를 안 쓰는 것은 offset 을
+				# 접촉점으로 잡아야 해서다 — 중앙으로 스냅하면 손맛이 부자연스럽다.
+				out["paddle_hit"] = true
+				attached = true
+				_attach_offset_u = clampf(ball_pos.x - paddle.pos.x,
+					-paddle.half_width, paddle.half_width)
+				ball_vel = Vector2.ZERO
+				ball_pos = paddle.pos + Vector2(_attach_offset_u,
+					Tuning.PADDLE_THICKNESS * 0.5 + Tuning.BALL_RADIUS)
+				break
 			var n_p := paddle.contact_normal(ball_pos.x)
 			var before := ball_vel
 			ball_vel = BallPhysics.paddle_bounce(before, n_p, paddle.vel,
@@ -148,6 +176,8 @@ func step(target: Vector2, dt: float) -> Dictionary:
 		if ball_pos.y < 0.0:
 			lives -= 1
 			out["lost"] = true
+			# 결정: 지속 효과는 목숨을 잃을 때만 풀린다(판 클리어로는 안 풀림).
+			active_item = Item.NONE
 			_spawn_dropping()
 			break
 
@@ -188,11 +218,14 @@ static func _item_rect(p: Vector2) -> Rect2:
 	var h := Tuning.ITEM_HALF_SIZE
 	return Rect2(p.x - h, p.y - h, h * 2.0, h * 2.0)
 
-# P 는 즉발이라 활성 슬롯이 없다. 지속 효과(E, S, C, L)가 들어오는 4b 에서
-# 슬롯이 여기 붙는다 — 담을 것이 없는 슬롯을 미리 만들지 않는다.
+# P 는 즉발이라 활성 슬롯을 안 거친다. E/S/C 는 슬롯에 그대로 덮어쓴다 —
+# 이전 것을 끄는 코드가 따로 없는 것은 슬롯이 정수 하나라 새 값이 곧 교체라서다.
+# 나머지(L, B, D)는 4b 나머지 청크에서 붙는다.
 func _apply_item(kind: int) -> void:
 	if kind == Item.P:
 		lives += 1
+	elif kind == Item.E or kind == Item.S or kind == Item.C:
+		active_item = kind
 
 # 공 원이 패들의 스윕 상자에 닿았는지. 상자가 축정렬이라 가장 가까운
 # 점까지의 거리로 판정한다.

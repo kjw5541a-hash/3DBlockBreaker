@@ -23,6 +23,12 @@ func _initialize() -> void:
 	_test_paddle_catches_an_item_and_gains_a_life()
 	_test_missed_item_disappears_without_costing_a_life()
 	_test_items_keep_falling_while_the_ball_is_attached()
+	_test_enlarge_widens_the_paddle_and_release_restores_it()
+	_test_slow_scales_ball_physics_but_not_elapsed()
+	_test_catch_attaches_the_ball_at_the_contact_point()
+	_test_caught_ball_launches_normally()
+	_test_new_active_item_replaces_the_previous_one()
+	_test_losing_a_life_clears_the_active_item()
 	print("test_play_field: OK")
 	quit()
 
@@ -509,3 +515,102 @@ func _test_items_keep_falling_while_the_ball_is_attached() -> void:
 		f.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), DT)
 	assert((f.items[0]["pos"] as Vector2).y < mid,
 		"새 공이 낙하하는 동안 아이템이 안 내려왔다")
+
+func _test_enlarge_widens_the_paddle_and_release_restores_it() -> void:
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	var base := Tuning.PADDLE_HALF_WIDTH
+	f.active_item = Item.E
+	f.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), DT)
+	assert(is_equal_approx(f.paddle.half_width, base * Tuning.ITEM_ENLARGE_MULT),
+		"Enlarge 가 활성인데 반폭이 안 늘었다: %f" % f.paddle.half_width)
+	f.active_item = Item.NONE
+	f.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), DT)
+	assert(is_equal_approx(f.paddle.half_width, base),
+		"Enlarge 가 풀렸는데 반폭이 안 돌아왔다: %f" % f.paddle.half_width)
+
+# 벽·블럭·패들과 안 부딪히는 자리에서 공을 자유비행시켜 물리 스케일만 본다.
+func _test_slow_scales_ball_physics_but_not_elapsed() -> void:
+	var slow := PlayField.new()
+	slow.grid.fill_all(0)
+	slow.attached = false
+	slow.ball_pos = Vector2(0.0, 8.0)
+	slow.ball_vel = Vector2(0.0, 10.0)
+	slow.active_item = Item.S
+	slow.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), DT)
+
+	var normal := PlayField.new()
+	normal.grid.fill_all(0)
+	normal.attached = false
+	normal.ball_pos = Vector2(0.0, 8.0)
+	normal.ball_vel = Vector2(0.0, 10.0)
+	normal.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), DT)
+
+	assert(slow.ball_pos.y < normal.ball_pos.y,
+		"Slow 가 걸렸는데 공이 평소만큼 움직였다: %f vs %f" % [slow.ball_pos.y, normal.ball_pos.y])
+	var expected_sub := DT * Tuning.ITEM_SLOW_TIMESCALE
+	var expected_vel_y := 10.0 - Tuning.GRAVITY * expected_sub
+	var expected_pos_y := 8.0 + expected_vel_y * expected_sub
+	assert(is_equal_approx(slow.ball_pos.y, expected_pos_y),
+		"Slow 물리 계산이 기대와 다르다: %f vs %f" % [slow.ball_pos.y, expected_pos_y])
+	assert(is_equal_approx(slow.elapsed, DT),
+		"Slow 가 elapsed 까지 늦췄다 — 속도 램프가 함께 얼면 안 된다: %f" % slow.elapsed)
+
+func _test_catch_attaches_the_ball_at_the_contact_point() -> void:
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	f.attached = false
+	f.active_item = Item.C
+	var target := Vector2(0.3, Tuning.PADDLE_BAND_MIN_V)
+	f.ball_pos = Vector2(0.5, Tuning.PADDLE_BAND_MIN_V + 0.6)
+	f.ball_vel = Vector2(0.0, -8.0)
+	var caught := false
+	for i in 60:
+		var r := f.step(target, DT)
+		if bool(r["paddle_hit"]):
+			caught = true
+			break
+	assert(caught, "Catch 가 활성인데 패들에 안 닿았다 — 테스트가 헛돈다")
+	assert(f.attached, "Catch 인데 패들에 안 붙었다")
+	assert(not is_equal_approx(f._attach_offset_u, 0.0),
+		"접촉점 오프셋이 0 이다 — 중앙으로 스냅한 것 같다")
+
+	# 패들이 움직여도 잡힌 자리(오프셋)를 유지하며 따라가야 한다.
+	var offset := f._attach_offset_u
+	f.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), DT)
+	assert(is_equal_approx(f.ball_pos.x, f.paddle.pos.x + offset),
+		"패들이 움직였는데 공이 오프셋을 안 지켰다")
+
+func _test_caught_ball_launches_normally() -> void:
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	f.active_item = Item.C
+	f.attached = true
+	f._attach_offset_u = 0.2
+	f.launch(Vector2(3.0, 0.0))
+	assert(not f.attached, "발사했는데 여전히 붙어 있다")
+	assert(f.ball_vel.length() > 0.0, "발사했는데 속도가 0 이다")
+
+func _test_new_active_item_replaces_the_previous_one() -> void:
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	f._apply_item(Item.E)
+	assert(f.active_item == Item.E, "E 를 먹었는데 활성 아이템이 아니다")
+	f._apply_item(Item.S)
+	assert(f.active_item == Item.S, "새 아이템을 먹었는데 이전 것이 안 풀렸다: %d" % f.active_item)
+
+func _test_losing_a_life_clears_the_active_item() -> void:
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	f.attached = false
+	f.active_item = Item.E
+	f.ball_pos = Vector2(Tuning.BOARD_HALF_WIDTH - Tuning.BALL_RADIUS, 0.2)
+	f.ball_vel = Vector2(0.0, -20.0)
+	var lost := false
+	for i in 60:
+		if f.step(Vector2(-Tuning.BOARD_HALF_WIDTH, Tuning.PADDLE_BAND_MIN_V), DT)["lost"]:
+			lost = true
+			break
+	assert(lost, "공이 데드존으로 나갔는데 lost 가 아니다 — 테스트가 헛돈다")
+	assert(f.active_item == Item.NONE,
+		"목숨을 잃었는데 활성 아이템이 안 풀렸다: %d" % f.active_item)

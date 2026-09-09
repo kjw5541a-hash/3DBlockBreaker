@@ -219,6 +219,9 @@ func sync(field: PlayField) -> void:
 	_paddle.position = board_to_local(field.paddle.pos, Tuning.PADDLE_THICKNESS * 0.5)
 	# 기울기를 눈에 보이게 한다. 법선과 같은 부호 규약을 쓴다.
 	_paddle.rotation = Vector3(0.0, 0.0, -deg_to_rad(field.paddle.tilt_deg))
+	# Enlarge 로 반폭이 바뀌면 메시도 따라간다 — 안 그러면 판정 상자와
+	# 눈에 보이는 크기가 어긋난다.
+	(_paddle.mesh as BoxMesh).size.x = field.paddle.half_width * 2.0
 
 func _make_brick(col: int, row: int, kind: int) -> MeshInstance3D:
 	var rect := BrickGrid.cell_rect(col, row)

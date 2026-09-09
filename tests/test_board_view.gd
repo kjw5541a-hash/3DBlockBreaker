@@ -12,6 +12,7 @@ func _initialize() -> void:
 	_test_paddle_break_hides_then_restores_the_paddle()
 	_test_brick_break_spawns_fragments()
 	_test_item_meshes_follow_the_field()
+	_test_paddle_mesh_widens_with_enlarge()
 	print("test_board_view: OK")
 	quit()
 
@@ -164,4 +165,19 @@ func _test_item_meshes_follow_the_field() -> void:
 	f.items.clear()
 	view.sync_items(f)
 	assert(view.item_count() == 0, "아이템이 다 사라졌는데 메시가 %d 개 남았다" % view.item_count())
+	view.free()
+
+func _test_paddle_mesh_widens_with_enlarge() -> void:
+	var view := BoardView.new()
+	root.add_child(view)
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	view.build(f.grid)
+	var base_size := (view._paddle.mesh as BoxMesh).size.x
+	f.active_item = Item.E
+	f.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), 1.0 / 120.0)
+	view.sync(f)
+	var widened_size := (view._paddle.mesh as BoxMesh).size.x
+	assert(widened_size > base_size,
+		"Enlarge 가 활성인데 패들 메시가 그대로다: %f -> %f" % [base_size, widened_size])
 	view.free()
