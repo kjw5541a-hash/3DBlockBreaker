@@ -30,6 +30,12 @@ func _ready() -> void:
 	_update_hud()
 	_trail = BallTrail.new()
 	board.add_child(_trail)
+	# 아이템·레이저·트레일은 전부 처음 그려질 때 셰이더 컴파일과 글리프
+	# 래스터화를 치른다. 그 순간이 아이템이 떨어지거나 공을 막 쏜 직후라
+	# 가장 끊기면 안 되는 때와 겹친다. 타이틀 화면에서 미리 그려 둔다.
+	board.warm_up()
+	_trail.push(field.ball_pos, 0.0)
+	_trail.push(field.ball_pos + Vector2(0.0, 0.02), 0.0)
 
 func _physics_process(delta: float) -> void:
 	if not _started:
@@ -96,20 +102,32 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event is InputEventScreenTouch and (event as InputEventScreenTouch).pressed:
 			_started = true
 			title_screen.visible = false
+			# 워밍업 잔재를 치운다. 트레일 점을 남기면 첫 발사 궤적이
+			# 공이 있지도 않았던 자리와 한 줄로 이어진다.
+			board.end_warm_up()
+			_trail.reset()
 		return
 	if event is InputEventScreenDrag:
 		_target = screen_to_board((event as InputEventScreenDrag).position)
 	elif event is InputEventScreenTouch:
 		var t := event as InputEventScreenTouch
 		if t.pressed:
+			# 다시 잡으면 올라가던 패들을 손가락이 도로 가져간다.
+			field.paddle.cancel_spring()
 			_target = screen_to_board(t.position)
-		elif field.attached:
-			# 손가락을 뗄 때 붙어 있던 공을 그때의 스윙 속도로 쏜다.
-			field.launch(field.paddle.vel)
 		else:
-			# 공이 이미 날아가는 중이면 같은 탭 제스처가 레이저를 쏜다
-			# (L 이 없거나 쿨다운 중이면 fire_laser() 안에서 조용히 무시된다).
-			field.fire_laser()
+			# 손을 뗀다 = 스프링. 손가락이 아직 아래를 가리키고 있으므로
+			# 타깃도 홈으로 올려 둔다 — 안 그러면 스프링이 끝나자마자
+			# 패들이 도로 손가락 자리로 내려간다.
+			_target.y = Tuning.PADDLE_HOME_V
+			field.paddle.start_spring()
+			if field.attached:
+				# 발사 속도는 여기서 안 준다. 올라오는 패들이 실제로 쳐서 만든다.
+				field.release_ball()
+			else:
+				# 공이 이미 날아가는 중이면 같은 탭 제스처가 레이저를 쏜다
+				# (L 이 없거나 쿨다운 중이면 fire_laser() 안에서 조용히 무시된다).
+				field.fire_laser()
 
 # 판이 기울어져 있으므로 화면 좌표를 그대로 쓸 수 없다. 카메라 광선을
 # 판 평면과 교차시킨다. 손가락 밑에 패들이 정확히 오는 감각이 전부

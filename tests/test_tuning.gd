@@ -6,6 +6,8 @@ func _initialize() -> void:
 	_test_v_max_reaches_top()
 	_test_speed_cap_ramps_with_time()
 	_test_geometry_is_consistent()
+	_test_home_is_the_middle_of_the_band()
+	_test_edge_hits_are_weaker_than_centered_ones()
 	print("test_tuning: OK")
 	quit()
 
@@ -62,3 +64,18 @@ func _test_geometry_is_consistent() -> void:
 		"공이 블럭 한 칸보다 넓다: %f vs %f" % [Tuning.BALL_RADIUS * 2.0, BrickGrid.CELL_W])
 	assert(Tuning.PADDLE_HALF_WIDTH < Tuning.BOARD_HALF_WIDTH,
 		"패들이 판보다 넓다")
+
+# 기본 위치가 밴드 한가운데여야 위로도 아래로도 같은 만큼 움직인다.
+# 홈이 한쪽에 붙어 있으면 그쪽 여유가 없어 스프링이 대칭으로 안 흔들린다.
+func _test_home_is_the_middle_of_the_band() -> void:
+	var down := Tuning.PADDLE_HOME_V - Tuning.PADDLE_BAND_MIN_V
+	var up := Tuning.PADDLE_BAND_MAX_V - Tuning.PADDLE_HOME_V
+	assert(is_equal_approx(down, up),
+		"홈이 밴드 한가운데가 아니다: 아래 %f 위 %f" % [down, up])
+
+# 스윗스팟. 정확히 가운데로 받으면 손해가 없고, 가장자리로 스치면 깎인다.
+func _test_edge_hits_are_weaker_than_centered_ones() -> void:
+	assert(Tuning.PADDLE_RESTITUTION_EDGE < Tuning.PADDLE_RESTITUTION,
+		"가장자리 반발이 가운데보다 약하지 않다")
+	# 1.0 을 넘으면 받을 때마다 에너지가 늘어 "손실원은 패들뿐"이 무너진다.
+	assert(Tuning.PADDLE_RESTITUTION <= 1.0, "가운데 반발이 1.0 을 넘는다")

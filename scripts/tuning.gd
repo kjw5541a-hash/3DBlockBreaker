@@ -22,6 +22,9 @@ const BRICK_TOP_V := 15.0
 # --- 패들이 움직일 수 있는 띠 ---
 const PADDLE_BAND_MIN_V := 0.4
 const PADDLE_BAND_MAX_V := 3.0
+# 손을 뗐을 때 돌아가 쉬는 자리. 밴드 한가운데라 아래로 당길 여유와 위로
+# 튕겨 넘어갈 여유가 같다 — 한쪽에 붙여 두면 그쪽 오버슈트가 벽에 막힌다.
+const PADDLE_HOME_V := (PADDLE_BAND_MIN_V + PADDLE_BAND_MAX_V) * 0.5
 
 # --- 공 ---
 const GRAVITY := 12.0
@@ -39,6 +42,11 @@ const MIN_ANGLE_DEG := 15.0
 # 이 게임에서 에너지를 잃는 유일한 곳. 벽과 블럭은 1.0 이다. 손실원이
 # 하나뿐이라 "왜 느려졌나"의 답이 언제나 "그냥 받았으니까"가 된다.
 const PADDLE_RESTITUTION := 0.80
+# 스윗스팟. 위 값은 패들 한가운데로 정확히 받았을 때고, 중심에서 멀어질수록
+# 여기까지 선형으로 깎인다. 가운데 값을 1.0 위로 올리면 받을 때마다 에너지가
+# 늘어 "손실원은 패들뿐"이라는 전제가 무너지므로, 정확도는 보상이 아니라
+# 손실을 안 보는 것으로 표현한다.
+const PADDLE_RESTITUTION_EDGE := 0.45
 const PADDLE_SPEED_TRANSFER := 0.60
 const PADDLE_HALF_WIDTH := 0.64
 const PADDLE_THICKNESS := 0.3
@@ -51,6 +59,26 @@ const PADDLE_TILT_FULL_SPEED := 25.0
 # 수직 반사밖에 안 나온다. 접촉점 오프셋이 정지 상태의 조준을 만든다.
 const CONTACT_ANGLE_MAX_DEG := 20.0
 const PADDLE_VEL_SMOOTH_FRAMES := 3
+
+# --- 스프링 복귀 ---
+# 손가락으로 홈 아래로 끌어내렸다 놓으면 감쇠 조화진동자로 돌아온다:
+#   a = -ω²·(y - HOME) - 2ζω·v
+# 패들에 얹힌 공은 같이 가속하다가 홈을 조금 지나서 떨어져 나가므로,
+# 홈을 지날 때의 속도가 곧 발사 속도가 된다.
+#
+# ω 는 파워 노브다. 최고 속도가 당긴 깊이에 비례해 오르는데, 그 값이
+# V_MAX_START 를 넘으면 안 된다 — 넘으면 공이 v_max 에 잘려 자기를 밀어낸
+# 패들보다 느려지고, 패들이 공을 추월해 메시를 뚫고 지나간다. 최대 깊이
+# 1.3 에 ζ=0.3 이면 22.0 에서 약 19.7 이 나온다.
+#
+# ζ 는 잔진동 노브다. 0.3 이면 홈 위로 0.48 만큼 한 번 시원하게 넘어갔다가
+# 두어 번 만에 가라앉는다. 더 낮추면 파워는 오르지만 패들이 몇 초씩 떨린다.
+const PADDLE_SPRING_FREQ := 22.0
+const PADDLE_SPRING_DAMPING := 0.3
+# 홈에서 이만큼 안쪽으로 들어오고 속도도 이만큼 줄면 스냅하고 끝낸다.
+# 감쇠 진동은 수학적으로는 영원히 안 멈춘다.
+const PADDLE_SPRING_REST_POS := 0.01
+const PADDLE_SPRING_REST_VEL := 0.1
 
 const LIVES := 3
 
