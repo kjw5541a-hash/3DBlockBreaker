@@ -107,8 +107,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			_target = screen_to_board(t.position)
 		else:
 			# 손을 뗀다 = 스프링. 손가락이 아직 아래를 가리키고 있으므로
-			# 타깃도 홈으로 올려 둔다 — 안 그러면 다 올라간 뒤 도로 내려간다.
-			_target.y = Tuning.PADDLE_BAND_MAX_V
+			# 타깃도 홈으로 올려 둔다 — 안 그러면 스프링이 끝나자마자
+			# 패들이 도로 손가락 자리로 내려간다.
+			_target.y = Tuning.PADDLE_HOME_V
 			field.paddle.start_spring()
 			if field.attached:
 				# 발사 속도는 여기서 안 준다. 올라오는 패들이 실제로 쳐서 만든다.

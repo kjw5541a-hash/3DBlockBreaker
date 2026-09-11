@@ -62,14 +62,16 @@ static func resolve_walls(pos: Vector2, vel: Vector2) -> Array[Vector2]:
 #
 # 이미 패들에서 멀어지는 중이면 손대지 않는다. 접촉이 두 프레임 이어질 때
 # 두 번 튕겨 공이 패들 안에서 진동하는 것을 막는다.
+# restitution 은 접촉점이 정한다(PaddleState.restitution). 가운데로 정확히
+# 받으면 온전하고 가장자리로 스치면 깎인다 — 조준과 별개의 정확도 축이다.
 static func paddle_bounce(v_in: Vector2, normal: Vector2, paddle_vel: Vector2,
-		v_max: float) -> Vector2:
+		v_max: float, restitution: float) -> Vector2:
 	if v_in.dot(normal) >= 0.0:
 		return v_in
-	var out := reflect(v_in, normal) * Tuning.PADDLE_RESTITUTION
+	var out := reflect(v_in, normal) * restitution
 	out += paddle_vel * Tuning.PADDLE_SPEED_TRANSFER
-	# 공은 자기를 친 패들보다 느리게 떠나지 않는다. 스프링 복귀가 정지한
-	# 공을 칠 때 transfer(0.6)만으로는 공이 반드시 패들보다 느려지고, 그러면
+	# 공은 자기를 친 패들보다 느리게 떠나지 않는다. 올라오는 패들이 느린
+	# 공을 칠 때 transfer(0.6)만으로는 공이 패들보다 느려질 수 있고, 그러면
 	# 패들이 곧바로 공을 추월해 메시를 뚫고 지나간다. 일반 랠리에서는 반사
 	# 성분이 훨씬 커서 이 하한이 걸리지 않는다 — 가만히 받으면 반발계수만큼
 	# 계속 느려지고 결국 공이 패들 위로 가라앉는다는 성질은 그대로다.

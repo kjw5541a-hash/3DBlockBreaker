@@ -27,10 +27,12 @@ func _initialize() -> void:
 	_test_slow_scales_ball_physics_but_not_elapsed()
 	_test_catch_attaches_the_ball_at_the_contact_point()
 	_test_caught_ball_launches_normally()
-	_test_the_rising_paddle_launches_the_released_ball()
+	_test_the_released_ball_rides_the_paddle_before_it_leaves()
 	_test_a_deep_pull_launches_faster_than_a_shallow_one()
 	_test_the_paddle_never_outruns_the_ball_it_launched()
 	_test_a_full_pull_reaches_the_bricks_from_the_bottom()
+	_test_a_shallow_pull_falls_short_of_the_bricks()
+	_test_a_centered_hit_sends_the_ball_faster_than_an_edge_hit()
 	_test_new_active_item_replaces_the_previous_one()
 	_test_losing_a_life_clears_the_active_item()
 	_test_next_stage_clears_the_active_item()
@@ -53,7 +55,7 @@ func _bounce_once(v_in: Vector2) -> Vector2:
 	var f := PlayField.new()
 	f.grid.fill_all(0)
 	f.attached = false
-	# 패들 홈은 밴드 위끝이다. 여기서 보려는 것은 랠리라 공 바로 밑에
+	# 패들 홈은 밴드 한가운데다. 여기서 보려는 것은 랠리라 공 바로 밑에
 	# 세워 둔다 — 위에서 시작하면 떨어지는 공을 스치지도 못하고 내려간다.
 	f.paddle.pos.y = Tuning.PADDLE_BAND_MIN_V
 	f.ball_pos = Vector2(0.0, Tuning.PADDLE_BAND_MIN_V + 0.6)
@@ -603,7 +605,7 @@ func _test_catch_attaches_the_ball_at_the_contact_point() -> void:
 		"패들이 움직였는데 공이 오프셋을 안 지켰다")
 
 # Catch 로 잡은 공도 스프링 발사로 날아간다. 예전 탭 발사는 놓는 순간
-# 속도를 계산했지만, 지금은 올라오는 패들이 실제로 쳐서 만든다.
+# 속도를 계산했지만, 지금은 튕겨 오르는 패들이 공을 실어 보낸다.
 func _test_caught_ball_launches_normally() -> void:
 	var f := PlayField.new()
 	f.grid.fill_all(0)
@@ -613,69 +615,94 @@ func _test_caught_ball_launches_normally() -> void:
 	f.paddle.pos.y = Tuning.PADDLE_BAND_MIN_V
 	f.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), DT)
 	f.release_ball()
-	assert(not f.attached, "놓았는데 여전히 붙어 있다")
 	f.paddle.start_spring()
-	var hit := false
-	for i in 60:
-		if bool(f.step(Vector2(0.0, Tuning.PADDLE_BAND_MAX_V), DT)["paddle_hit"]):
-			hit = true
+	for i in 300:
+		f.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), DT)
+		if not f.attached:
 			break
-	assert(hit, "잡힌 공을 올라오는 패들이 안 쳤다")
-	assert(f.ball_vel.y > 0.0, "맞았는데 위로 안 간다: %f" % f.ball_vel.y)
+	assert(not f.attached, "300 프레임을 돌려도 잡힌 공이 안 떠났다")
+	assert(f.ball_vel.y > 0.0, "떠났는데 위로 안 간다: %f" % f.ball_vel.y)
 
-# --- 스프링 발사. 놓는 순간이 아니라 올라오는 패들이 실제로 쳐서 만든다.
+# --- 스프링 발사. 놓는 순간이 아니라 패들에 얹힌 채 같이 가속하다가,
+# --- 용수철이 중력보다 세게 잡아당기는 지점에서 스스로 떨어져 나간다.
 
-func _test_the_rising_paddle_launches_the_released_ball() -> void:
+func _test_the_released_ball_rides_the_paddle_before_it_leaves() -> void:
 	var f := _pulled_to(Tuning.PADDLE_BAND_MIN_V)
 	f.release_ball()
-	assert(not f.attached, "놓았는데 여전히 붙어 있다")
-	assert(is_equal_approx(f.ball_vel.length(), 0.0),
-		"놓는 순간에 속도를 매겼다 — 발사는 패들이 쳐서 만들어야 한다: %s" % f.ball_vel)
 	f.paddle.start_spring()
-	var hit := false
-	for i in 60:
-		if bool(f.step(Vector2(0.0, Tuning.PADDLE_BAND_MAX_V), DT)["paddle_hit"]):
-			hit = true
+	# 놓자마자 떨어지면 안 된다. 밀어 올리는 구간이 곧 파워다.
+	f.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), DT)
+	assert(f.attached, "놓자마자 공이 떨어져 나갔다 — 밀어 올릴 구간이 없다")
+	var riding := 0
+	for i in 300:
+		f.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), DT)
+		if not f.attached:
 			break
-	assert(hit, "올라오는 패들이 공을 안 쳤다")
-	assert(f.ball_vel.y > 0.0, "맞았는데 위로 안 간다: %f" % f.ball_vel.y)
+		riding += 1
+		assert(is_equal_approx(f.ball_pos.y, f.paddle.pos.y
+			+ Tuning.PADDLE_THICKNESS * 0.5 + Tuning.BALL_RADIUS),
+			"얹혀 있는 동안 공이 패들 표면을 떠났다: %f" % f.ball_pos.y)
+	assert(not f.attached, "300 프레임을 돌려도 공이 안 떠났다")
+	assert(riding > 2, "밀어 올린 프레임이 너무 적다 — 사실상 즉발이다: %d" % riding)
+	assert(f.ball_vel.y > 0.0, "떠났는데 위로 안 간다: %f" % f.ball_vel.y)
 
 # 깊이가 곧 파워다. 이게 깨지면 깊게 당길수록 더 낮은 곳에서 같은 속도로
 # 쏘게 되어 당기는 것이 순손해가 된다.
 func _test_a_deep_pull_launches_faster_than_a_shallow_one() -> void:
 	var deep := _spring_launch_speed(Tuning.PADDLE_BAND_MIN_V)
-	var shallow := _spring_launch_speed(Tuning.PADDLE_BAND_MAX_V - 0.3)
-	assert(deep > shallow,
+	var shallow := _spring_launch_speed(Tuning.PADDLE_HOME_V - 0.3)
+	assert(deep > shallow + 1.0,
 		"깊게 당겼는데 발사가 더 안 빠르다: %f vs %f" % [deep, shallow])
 
-# 공이 자기를 친 패들보다 느리면 패들이 곧바로 공을 추월해 메시를 뚫고
-# 지나간다. transfer(0.6)만으로는 정지한 공이 항상 패들보다 느리게 떠난다.
+# 공이 자기를 밀어낸 패들보다 느리면 패들이 곧바로 공을 추월해 메시를
+# 뚫고 지나간다.
 func _test_the_paddle_never_outruns_the_ball_it_launched() -> void:
 	var f := _pulled_to(Tuning.PADDLE_BAND_MIN_V)
 	f.release_ball()
 	f.paddle.start_spring()
-	var hit := false
-	for i in 60:
-		if bool(f.step(Vector2(0.0, Tuning.PADDLE_BAND_MAX_V), DT)["paddle_hit"]):
-			hit = true
-			assert(f.ball_vel.length() >= f.paddle.vel.y - 0.0001,
-				"공이 자기를 친 패들보다 느리다 — 패들이 추월한다: %f vs %f" % [
-					f.ball_vel.length(), f.paddle.vel.y])
+	for i in 300:
+		f.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), DT)
+		if not f.attached:
 			break
-	assert(hit, "올라오는 패들이 공을 안 쳤다 — 테스트가 헛돈다")
+	assert(not f.attached, "공이 안 떠났다 — 테스트가 헛돈다")
+	for i in 60:
+		f.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), DT)
+		assert(f.ball_pos.y >= f.paddle.pos.y,
+			"패들이 자기가 쏜 공을 추월했다: 공 %f 패들 %f" % [f.ball_pos.y, f.paddle.pos.y])
 
 # 밴드 맨 아래에서 쏜 풀당김이 최하단 블럭 줄에 못 닿으면, 깊게 당기는
 # 것이 손해가 되어 조작 전체가 뒤집힌다.
 func _test_a_full_pull_reaches_the_bricks_from_the_bottom() -> void:
-	var f := _pulled_to(Tuning.PADDLE_BAND_MIN_V)
-	f.release_ball()
-	f.paddle.start_spring()
-	var peak := 0.0
-	for i in 300:
-		f.step(Vector2(0.0, Tuning.PADDLE_BAND_MAX_V), DT)
-		peak = maxf(peak, f.ball_pos.y)
-	assert(peak >= Tuning.BRICK_BOTTOM_V,
-		"풀당김이 최하단 블럭 줄(%f)에 못 닿았다: %f" % [Tuning.BRICK_BOTTOM_V, peak])
+	assert(_spring_apex(Tuning.PADDLE_BAND_MIN_V) >= Tuning.BRICK_BOTTOM_V,
+		"풀당김이 최하단 블럭 줄(%f)에 못 닿았다: %f" % [
+			Tuning.BRICK_BOTTOM_V, _spring_apex(Tuning.PADDLE_BAND_MIN_V)])
+
+# 반대쪽 계약. 살짝 당긴 것으로도 블럭에 닿으면 깊게 당길 이유가 없어진다.
+func _test_a_shallow_pull_falls_short_of_the_bricks() -> void:
+	var apex := _spring_apex(Tuning.PADDLE_HOME_V - 0.3)
+	assert(apex < Tuning.BRICK_BOTTOM_V,
+		"살짝 당긴 것으로 블럭 줄에 닿는다 — 당길 이유가 없어진다: %f" % apex)
+
+# 스윗스팟. 같은 공을 같은 세기로 받아도 패들 가운데로 정확히 받았을 때
+# 더 세게 나간다. 이게 없으면 어디로 받든 손해가 없다.
+func _test_a_centered_hit_sends_the_ball_faster_than_an_edge_hit() -> void:
+	var center := _catch_speed(0.0)
+	var edge := _catch_speed(Tuning.PADDLE_HALF_WIDTH * 0.95)
+	assert(center > edge + 0.5,
+		"가운데로 받으나 가장자리로 받으나 똑같다: %f vs %f" % [center, edge])
+
+# 패들을 가만히 둔 채, 중심에서 offset_u 만큼 빗나간 자리로 공을 받는다.
+func _catch_speed(offset_u: float) -> float:
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	f.attached = false
+	f.paddle.pos.y = Tuning.PADDLE_BAND_MIN_V
+	f.ball_pos = Vector2(offset_u, Tuning.PADDLE_BAND_MIN_V + 0.6)
+	f.ball_vel = Vector2(0.0, -Tuning.v_min())
+	for i in 240:
+		if bool(f.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), DT)["paddle_hit"]):
+			return f.ball_vel.length()
+	return 0.0
 
 # 손가락으로 패들을 pull_v 까지 끌어내린 상태. 붙은 공도 함께 내려와 있다.
 func _pulled_to(pull_v: float) -> PlayField:
@@ -689,10 +716,22 @@ func _spring_launch_speed(pull_v: float) -> float:
 	var f := _pulled_to(pull_v)
 	f.release_ball()
 	f.paddle.start_spring()
-	for i in 60:
-		if bool(f.step(Vector2(0.0, Tuning.PADDLE_BAND_MAX_V), DT)["paddle_hit"]):
+	for i in 300:
+		f.step(Vector2(0.0, pull_v), DT)
+		if not f.attached:
 			return f.ball_vel.length()
 	return 0.0
+
+# 당겼다 놓은 공이 올라가는 최고 높이.
+func _spring_apex(pull_v: float) -> float:
+	var f := _pulled_to(pull_v)
+	f.release_ball()
+	f.paddle.start_spring()
+	var apex := 0.0
+	for i in 600:
+		f.step(Vector2(0.0, pull_v), DT)
+		apex = maxf(apex, f.ball_pos.y)
+	return apex
 
 func _test_new_active_item_replaces_the_previous_one() -> void:
 	var f := PlayField.new()

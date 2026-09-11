@@ -6,6 +6,11 @@ var paddle: PaddleState
 var ball_pos: Vector2
 var ball_vel: Vector2 = Vector2.ZERO
 var attached: bool = true
+# 손은 이미 뗐지만 공이 아직 패들 위에 얹혀 있다. 스프링이 밀어 올리는
+# 동안은 붙은 채로 같이 가속하다가, 패들이 중력보다 세게 감속하기 시작하면
+# (paddle.separating) 그때의 패들 속도를 그대로 안고 떠난다. attached 가
+# 꺼지는 순간 이 값도 꺼진다.
+var riding: bool = false
 # 목숨을 잃은 직후, 새 공이 패들 위로 떨어져 내리는 중이다. attached 와
 # 배타적이다 — 착지하면 _attach() 가 이 값을 끈다.
 var dropping: bool = false
@@ -50,6 +55,7 @@ func _init() -> void:
 
 func _attach() -> void:
 	attached = true
+	riding = false
 	dropping = false
 	ball_vel = Vector2.ZERO
 	_attach_offset_u = 0.0
@@ -61,20 +67,21 @@ func _attach() -> void:
 # 때(_attach)는 그냥 즉시 붙는다, 그건 손실이 아니라서다.
 func _spawn_dropping() -> void:
 	attached = false
+	riding = false
 	dropping = true
 	ball_vel = Vector2.ZERO
 	ball_pos = Vector2(paddle.pos.x,
 		paddle.pos.y + Tuning.PADDLE_THICKNESS * 0.5 + Tuning.BALL_RADIUS + DROP_HEIGHT)
 	_last_damaged = -1
 
-# 붙어 있는 공을 놓는다. 속도를 안 주는 것이 핵심이다 — 발사는 여기서
-# 계산하지 않고, 홈으로 튕겨 올라가는 패들이 실제로 공을 쳐서 만든다.
+# 붙어 있는 공을 놓는다. 여기서 속도를 안 주는 것이 핵심이다 — 공은 아직
+# 패들 위에 얹혀 있고, 튕겨 오르는 패들과 함께 가속하다가 저절로 떠난다.
 # 그래서 파워는 당긴 깊이가, 각도는 공이 패들 위 어디에 얹혀 있었는지가
 # 정한다(contact_normal 의 접촉점 오프셋).
 func release_ball() -> void:
 	if not attached:
 		return
-	attached = false
+	riding = true
 	ball_vel = Vector2.ZERO
 
 # L 이 활성이고 쿨다운이 끝났을 때만 한 발 나간다. 연타로 화면을 볼트로
@@ -102,6 +109,18 @@ func step(target: Vector2, dt: float) -> Dictionary:
 	if attached:
 		ball_pos = paddle.pos + Vector2(_attach_offset_u,
 			Tuning.PADDLE_THICKNESS * 0.5 + Tuning.BALL_RADIUS)
+		# 손을 뗀 공은 패들에 얹힌 채 같이 밀려 올라가다가, 용수철이 중력보다
+		# 세게 잡아당기기 시작하는 지점에서 접촉을 잃는다. 그때가 패들이 가장
+		# 빠른 순간이라 그 속도가 그대로 발사 속도가 된다.
+		if riding and paddle.separating():
+			attached = false
+			riding = false
+			# 패들 속도를 그대로 안고 간다. 손가락을 옆으로 흘리면서 놓으면
+			# 그 가로 성분도 실린다 — 상한과 최소각은 공 물리 쪽 규칙을
+			# 그대로 따른다.
+			ball_vel = BallPhysics.enforce_min_angle(
+				BallPhysics.clamp_speed(paddle.vel, 0.0, Tuning.v_max_at(elapsed)),
+				Tuning.MIN_ANGLE_DEG)
 		return out
 	if dropping:
 		# x 는 패들을 그대로 따라간다 — 낙하 중에 손가락이 움직여도 헛착지가
@@ -171,6 +190,7 @@ func step(target: Vector2, dt: float) -> Dictionary:
 				# 접촉점으로 잡아야 해서다 — 중앙으로 스냅하면 손맛이 부자연스럽다.
 				out["paddle_hit"] = true
 				attached = true
+				riding = false
 				_attach_offset_u = clampf(ball_pos.x - paddle.pos.x,
 					-paddle.half_width, paddle.half_width)
 				ball_vel = Vector2.ZERO
@@ -180,7 +200,7 @@ func step(target: Vector2, dt: float) -> Dictionary:
 			var n_p := paddle.contact_normal(ball_pos.x)
 			var before := ball_vel
 			ball_vel = BallPhysics.paddle_bounce(before, n_p, paddle.vel,
-				Tuning.v_max_at(elapsed))
+				Tuning.v_max_at(elapsed), paddle.restitution(ball_pos.x))
 			if ball_vel != before:
 				out["paddle_hit"] = true
 				# 패들 표면 밖으로 꺼내 다음 스텝에 다시 물리지 않게 한다.
