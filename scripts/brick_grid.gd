@@ -56,6 +56,16 @@ func hit(col: int, row: int) -> void:
 	if cells[i] > 0:
 		cells[i] -= 1
 
+# 불타는 공이 뚫고 지나간다. 남은 히트를 무시하고 한 번에 비운다 — hit() 을
+# 히트 수만큼 반복해서 부르지 않는 것은, 부르는 쪽이 그 블럭이 몇 히트짜리인지
+# 알 필요가 없게 하려는 것이다. 불괴는 여기서도 안 깨진다.
+func destroy(col: int, row: int) -> void:
+	if col < 0 or col >= Tuning.BRICK_COLS or row < 0 or row >= Tuning.BRICK_ROWS:
+		return
+	var i := index(col, row)
+	if cells[i] > 0:
+		cells[i] = 0
+
 # 아이템을 꺼내면서 칸을 비운다. 읽기와 지우기가 갈라지면 같은 블럭이 두 번
 # 떨어뜨릴 여지가 생긴다.
 func take_item(col: int, row: int) -> int:

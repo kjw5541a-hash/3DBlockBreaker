@@ -4,6 +4,7 @@ func _initialize() -> void:
 	_test_length_scales_with_speed()
 	_test_color_scales_with_speed()
 	_test_history_is_bounded()
+	_test_fire_overrides_the_speed_color()
 	print("test_ball_trail: OK")
 	quit()
 
@@ -20,6 +21,16 @@ func _test_color_scales_with_speed() -> void:
 	var fast := BallTrail.color_for(Tuning.V_MAX)
 	assert(fast.get_luminance() > slow.get_luminance(),
 		"빠른 공이 더 밝아야 한다: %f vs %f" % [fast.get_luminance(), slow.get_luminance()])
+
+# 불이 붙은 동안은 트레일이 속도계 노릇을 잠깐 그만둔다. 속도는 언제나 볼 수
+# 있지만 불은 몇 초짜리 상태라, 지금 뚫리는 중인지가 더 급한 정보다.
+func _test_fire_overrides_the_speed_color() -> void:
+	for speed in [Tuning.v_min(), Tuning.V_MAX]:
+		var fire := BallTrail.color_for(speed, true)
+		assert(fire.is_equal_approx(Tuning.FIRE_COLOR),
+			"불타는 트레일이 불 색이 아니다: %s" % fire)
+		assert(not fire.is_equal_approx(BallTrail.color_for(speed)),
+			"불이 붙었는데 평소 색과 같다: %s" % fire)
 
 func _test_history_is_bounded() -> void:
 	var t := BallTrail.new()

@@ -13,6 +13,8 @@ func _initialize() -> void:
 	_test_indestructible_never_breaks()
 	_test_indestructible_is_not_counted_as_remaining()
 	_test_indestructible_still_bounces()
+	_test_destroy_takes_a_hard_brick_out_in_one_go()
+	_test_destroy_leaves_the_indestructible_alone()
 	print("test_brick_grid: OK")
 	quit()
 
@@ -163,3 +165,21 @@ func _test_indestructible_still_bounces() -> void:
 	assert(q["hit"], "불괴 블럭이 공을 안 튕긴다")
 	assert(q["normal"].is_equal_approx(Vector2(0.0, -1.0)),
 		"불괴 블럭의 아래 면 법선이 틀렸다: %s" % q["normal"])
+
+# 불타는 공은 남은 히트를 무시하고 뚫는다. hit() 을 히트 수만큼 반복해서
+# 부르는 대신 따로 두는 것은, 부르는 쪽이 그 블럭이 몇 히트짜리인지 알
+# 필요가 없게 하려는 것이다.
+func _test_destroy_takes_a_hard_brick_out_in_one_go() -> void:
+	var g := BrickGrid.new()
+	g.cells[BrickGrid.index(3, 2)] = BrickGrid.MAX_HARD
+	g.destroy(3, 2)
+	assert(g.get_cell(3, 2) == 0,
+		"뚫었는데 단단 블럭이 남았다: %d" % g.get_cell(3, 2))
+
+# 불도 불괴는 못 깬다. 이게 깨지면 배치로 난이도를 주던 수단이 사라진다.
+func _test_destroy_leaves_the_indestructible_alone() -> void:
+	var g := BrickGrid.new()
+	g.cells[BrickGrid.index(3, 2)] = BrickGrid.INDESTRUCTIBLE
+	g.destroy(3, 2)
+	assert(g.get_cell(3, 2) == BrickGrid.INDESTRUCTIBLE,
+		"불괴 블럭이 뚫렸다: %d" % g.get_cell(3, 2))

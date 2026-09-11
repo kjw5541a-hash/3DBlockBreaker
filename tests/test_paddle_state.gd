@@ -18,6 +18,8 @@ func _initialize() -> void:
 	_test_spring_velocity_ignores_the_downward_drag()
 	_test_the_ball_separates_at_the_paddles_fastest_moment()
 	_test_restitution_peaks_at_the_paddle_center()
+	_test_sweet_spot_is_the_middle_of_the_paddle()
+	_test_enlarge_widens_the_sweet_spot_too()
 	print("test_paddle_state: OK")
 	quit()
 
@@ -239,3 +241,32 @@ func _test_restitution_peaks_at_the_paddle_center() -> void:
 	# 반발이 음수가 되어 공이 패들 쪽으로 빨려 든다.
 	assert(is_equal_approx(p.restitution(p.pos.x + p.half_width * 5.0),
 		Tuning.PADDLE_RESTITUTION_EDGE), "패들 밖에서 반발이 안 잘린다")
+
+# 불타는 공을 켜는 판정. restitution() 과 같은 오프셋을 써야 한다 — 두 군데가
+# 각자 계산하면 한쪽 폭만 바꿨을 때 "잘 받았는데 불이 안 붙는" 구간이 조용히
+# 생긴다. 여기서는 경계 양쪽을 눌러 폭 자체를 고정한다.
+func _test_sweet_spot_is_the_middle_of_the_paddle() -> void:
+	var p := PaddleState.new(0.0)
+	assert(p.sweet_spot(p.pos.x), "패들 정중앙인데 스윗스팟이 아니다")
+	var edge_of_window := Tuning.PADDLE_SWEET_SPOT * p.half_width
+	assert(p.sweet_spot(p.pos.x + edge_of_window * 0.9),
+		"판정창 안쪽인데 스윗스팟이 아니다")
+	assert(not p.sweet_spot(p.pos.x + edge_of_window * 1.1),
+		"판정창 밖인데 스윗스팟이다")
+	assert(not p.sweet_spot(p.pos.x - p.half_width),
+		"패들 맨 끝인데 스윗스팟이다")
+	# 패들이 옆으로 가면 창도 같이 간다 — 창이 판 좌표에 고정돼 있으면
+	# 패들을 옮길 때마다 조준점이 달라진다.
+	p.pos.x = 1.5
+	assert(p.sweet_spot(1.5), "패들을 옮겼더니 중앙이 스윗스팟이 아니다")
+	assert(not p.sweet_spot(0.0), "패들을 옮겼는데 옛 자리가 아직 스윗스팟이다")
+
+# 판정을 half_width 로 정규화한 결과다. E 는 받기 쉬워지는 아이템이니
+# 불도 내기 쉬워지는 것이 성격에 맞다. 절대폭으로 바꾸면 여기가 터진다.
+func _test_enlarge_widens_the_sweet_spot_too() -> void:
+	var p := PaddleState.new(0.0)
+	var just_outside := Tuning.PADDLE_SWEET_SPOT * p.half_width * 1.2
+	assert(not p.sweet_spot(just_outside), "테스트 전제가 깨졌다 — 이미 창 안이다")
+	p.half_width = Tuning.PADDLE_HALF_WIDTH * Tuning.ITEM_ENLARGE_MULT
+	assert(p.sweet_spot(just_outside),
+		"Enlarge 로 패들이 넓어졌는데 판정창은 그대로다: %f" % just_outside)

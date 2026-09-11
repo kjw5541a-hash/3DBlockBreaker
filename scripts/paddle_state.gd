@@ -110,8 +110,20 @@ func contact_normal(ball_u: float) -> Vector2:
 # 스치면 깎인다. 패들 밖 값도 가장자리로 막는다 — 안 막으면 스쳐 맞을 때
 # 반발이 음수가 되어 공이 패들 쪽으로 빨려 든다.
 func restitution(ball_u: float) -> float:
-	var offset := clampf(absf(ball_u - pos.x) / half_width, 0.0, 1.0)
-	return lerpf(Tuning.PADDLE_RESTITUTION, Tuning.PADDLE_RESTITUTION_EDGE, offset)
+	return lerpf(Tuning.PADDLE_RESTITUTION, Tuning.PADDLE_RESTITUTION_EDGE,
+		_contact_offset(ball_u))
+
+# 불타는 공이 붙는 판정. 반발계수와 같은 오프셋을 쓴다 — 두 군데가 각자
+# 계산하면 한쪽 폭만 조정했을 때 "잘 받았는데 불이 안 붙는" 구간이 조용히
+# 생긴다.
+func sweet_spot(ball_u: float) -> bool:
+	return _contact_offset(ball_u) < Tuning.PADDLE_SWEET_SPOT
+
+# 패들 중심에서 얼마나 빗나갔나. 0 이 정중앙, 1 이 가장자리다. 패들 밖 값도
+# 1 로 막는다 — 안 막으면 스쳐 맞을 때 반발이 음수가 되어 공이 패들 쪽으로
+# 빨려 든다.
+func _contact_offset(ball_u: float) -> float:
+	return clampf(absf(ball_u - pos.x) / half_width, 0.0, 1.0)
 
 func rect() -> Rect2:
 	return _rect_at(pos)

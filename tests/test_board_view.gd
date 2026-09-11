@@ -16,6 +16,8 @@ func _initialize() -> void:
 	_test_laser_meshes_follow_the_field()
 	_test_warm_up_draws_every_item_letter()
 	_test_warm_up_hands_the_pool_back_intact()
+	_test_the_ball_looks_different_while_it_burns()
+	_test_fire_costs_no_new_shader_variant()
 	print("test_board_view: OK")
 	quit()
 
@@ -263,4 +265,46 @@ func _test_warm_up_hands_the_pool_back_intact() -> void:
 	assert((view._items[0].get_node("Label") as Label3D).text == "S",
 		"워밍업 글자가 진짜 아이템에 그대로 남았다: %s"
 		% (view._items[0].get_node("Label") as Label3D).text)
+	view.free()
+
+# 불이 붙었다는 것은 블럭을 뚫는다는 뜻이라, 화면 번쩍임이 지나간 뒤에도
+# 공만 보고 지금 상태를 알 수 있어야 한다.
+func _test_the_ball_looks_different_while_it_burns() -> void:
+	var view := BoardView.new()
+	root.add_child(view)
+	var f := PlayField.new()
+	view.build(f.grid)
+	view.sync(f)
+	var normal := (view._ball.material_override as StandardMaterial3D).albedo_color
+	f.burning = true
+	view.sync(f)
+	var fire := (view._ball.material_override as StandardMaterial3D).albedo_color
+	assert(fire.is_equal_approx(Tuning.FIRE_COLOR), "불타는 공이 불 색이 아니다: %s" % fire)
+	assert(not fire.is_equal_approx(normal), "불이 붙었는데 공 색이 그대로다: %s" % fire)
+	f.burning = false
+	view.sync(f)
+	var back := (view._ball.material_override as StandardMaterial3D).albedo_color
+	assert(back.is_equal_approx(normal), "불이 꺼졌는데 공이 계속 탄다: %s" % back)
+	view.free()
+
+# 두 재질의 기능 조합이 같아야 한다. 다르면 첫 점화에서 셰이더 변종이 새로
+# 컴파일돼, 하필 화면이 번쩍이고 블럭이 뚫리는 순간에 프레임이 멎는다.
+# 아이템처럼 미리 그려 굽는 방법도 있지만, 색만 다르게 두면 구울 것 자체가
+# 안 생긴다 — 타이틀 화면에서 이미 그려지는 공 하나로 끝난다.
+func _test_fire_costs_no_new_shader_variant() -> void:
+	var view := BoardView.new()
+	root.add_child(view)
+	var f := PlayField.new()
+	view.build(f.grid)
+	view.sync(f)
+	var normal := view._ball.material_override as StandardMaterial3D
+	f.burning = true
+	view.sync(f)
+	var fire := view._ball.material_override as StandardMaterial3D
+	assert(fire != normal, "테스트가 같은 재질을 두 번 보고 있다")
+	assert(fire.emission_enabled == normal.emission_enabled,
+		"emission 여부가 달라 셰이더 변종이 갈린다")
+	assert(fire.shading_mode == normal.shading_mode, "셰이딩 모드가 달라 변종이 갈린다")
+	assert(fire.transparency == normal.transparency, "투명도 모드가 달라 변종이 갈린다")
+	assert(fire.cull_mode == normal.cull_mode, "컬 모드가 달라 변종이 갈린다")
 	view.free()

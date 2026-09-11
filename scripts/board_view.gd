@@ -8,6 +8,9 @@ var _bricks: Dictionary = {}   # index -> MeshInstance3D
 # 화면이 그대로다.
 var _brick_kinds: Dictionary = {}
 var _ball: MeshInstance3D
+# 평소 공과 불타는 공. 매 프레임 새로 만들지 않고 둘을 갈아끼우기만 한다.
+var _ball_mat: StandardMaterial3D
+var _ball_fire_mat: StandardMaterial3D
 var _paddle: MeshInstance3D
 var _walls: Array[MeshInstance3D] = []
 # 떨어지는 아이템 메시. 풀이라 한 번 만든 메시는 안 지우고 숨겼다 재쓴다 —
@@ -304,6 +307,8 @@ func sync(field: PlayField) -> void:
 	sync_items(field)
 	sync_lasers(field)
 	_ball.position = board_to_local(field.ball_pos, Tuning.BALL_RADIUS)
+	# 번쩍임은 0.15초면 끝난다. 그 뒤로도 지금 뚫리는 중인지는 공을 보고 안다.
+	_ball.material_override = _ball_fire_mat if field.burning else _ball_mat
 	_paddle.position = board_to_local(field.paddle.pos, Tuning.PADDLE_THICKNESS * 0.5)
 	# 기울기를 눈에 보이게 한다. 법선과 같은 부호 규약을 쓴다.
 	_paddle.rotation = Vector3(0.0, 0.0, -deg_to_rad(field.paddle.tilt_deg))
@@ -363,10 +368,22 @@ func _make_ball() -> MeshInstance3D:
 	mesh.height = Tuning.BALL_RADIUS * 2.0
 	var m := MeshInstance3D.new()
 	m.mesh = mesh
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(1.0, 0.95, 0.8)
-	m.material_override = mat
+	_ball_mat = _make_ball_material(Color(1.0, 0.95, 0.8), Color.BLACK)
+	_ball_fire_mat = _make_ball_material(Tuning.FIRE_COLOR, Tuning.FIRE_COLOR)
+	m.material_override = _ball_mat
 	return m
+
+# 두 재질의 기능 조합을 일부러 똑같이 맞춘다. emission 을 한쪽만 켜면 셰이더
+# 변종이 갈려 첫 점화에서 컴파일이 걸리는데, 하필 화면이 번쩍이고 블럭이
+# 뚫리는 순간에 프레임이 멎는다. 조합이 같으면 타이틀 화면에서 이미 그려지는
+# 공 하나로 둘 다 구워진 셈이 돼 아이템처럼 따로 워밍업할 것이 없다.
+# 평소 공은 emission 이 검정이라 지금까지와 똑같이 보인다.
+func _make_ball_material(albedo: Color, emission: Color) -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = albedo
+	mat.emission_enabled = true
+	mat.emission = emission
+	return mat
 
 func _make_paddle() -> MeshInstance3D:
 	var mesh := BoxMesh.new()
