@@ -16,6 +16,7 @@ func _run() -> void:
 	_test_stage_label_follows_the_stage_index()
 	_test_title_screen_blocks_play_until_touched()
 	_test_physics_gated_until_started()
+	_test_warm_up_primes_the_trail_then_clears_it()
 	await _test_screen_point_maps_to_board()
 	await _test_board_fits_in_camera()
 	print("test_game_smoke: OK")
@@ -196,6 +197,25 @@ func _test_physics_gated_until_started() -> void:
 	g._started = true
 	g._physics_process(1.0 / 120.0)
 	assert(g.field.ball_pos != before, "시작했는데 물리가 안 돈다")
+	g.free()
+
+# 트레일 재질도 첫 그리기에 셰이더 컴파일이 걸린다. 그 순간이 첫 발사
+# 직후라 공이 막 빨라지는 시점에 프레임이 멎는다. 타이틀 화면에서 미리
+# 치르되, 시작할 때는 옛 점이 남아 첫 궤적과 한 줄로 이어지면 안 된다.
+func _test_warm_up_primes_the_trail_then_clears_it() -> void:
+	var packed := load("res://scenes/game.tscn") as PackedScene
+	var g := packed.instantiate()
+	root.add_child(g)
+	g._ready()
+	# 리본은 점이 둘은 있어야 삼각형이 생긴다 — 하나면 그려지지도 않는다.
+	assert(g._trail.point_count() >= 2,
+		"타이틀 화면에서 트레일이 안 구워졌다: %d" % g._trail.point_count())
+	var touch := InputEventScreenTouch.new()
+	touch.pressed = true
+	g._unhandled_input(touch)
+	assert(g._trail.point_count() == 0,
+		"시작했는데 워밍업 점이 남았다 — 첫 궤적이 옛 자리와 이어진다: %d"
+		% g._trail.point_count())
 	g.free()
 
 func _test_screen_point_maps_to_board() -> void:

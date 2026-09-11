@@ -30,6 +30,12 @@ func _ready() -> void:
 	_update_hud()
 	_trail = BallTrail.new()
 	board.add_child(_trail)
+	# 아이템·레이저·트레일은 전부 처음 그려질 때 셰이더 컴파일과 글리프
+	# 래스터화를 치른다. 그 순간이 아이템이 떨어지거나 공을 막 쏜 직후라
+	# 가장 끊기면 안 되는 때와 겹친다. 타이틀 화면에서 미리 그려 둔다.
+	board.warm_up()
+	_trail.push(field.ball_pos, 0.0)
+	_trail.push(field.ball_pos + Vector2(0.0, 0.02), 0.0)
 
 func _physics_process(delta: float) -> void:
 	if not _started:
@@ -96,6 +102,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event is InputEventScreenTouch and (event as InputEventScreenTouch).pressed:
 			_started = true
 			title_screen.visible = false
+			# 워밍업 잔재를 치운다. 트레일 점을 남기면 첫 발사 궤적이
+			# 공이 있지도 않았던 자리와 한 줄로 이어진다.
+			board.end_warm_up()
+			_trail.reset()
 		return
 	if event is InputEventScreenDrag:
 		_target = screen_to_board((event as InputEventScreenDrag).position)

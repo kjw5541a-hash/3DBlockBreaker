@@ -259,6 +259,46 @@ func _make_item() -> MeshInstance3D:
 	m.add_child(label)
 	return m
 
+# 웹 빌드는 GL Compatibility 로 떨어지고, 이 렌더러는 재질 기능 조합마다
+# 셰이더를 "처음 그릴 때" 컴파일한다. Label3D 도 마찬가지로 글자를 처음 그릴
+# 때 64px 로 래스터화해 아틀라스에 올린다. 그래서 아이템이나 레이저가 그 판에서
+# 처음 뜨는 프레임에만 비용이 몰려 화면이 한 번 멎는다 — 풀링은 노드를
+# 재사용할 뿐 이 첫 비용을 없애지 못한다.
+#
+# 타이틀 화면이 떠 있는 동안 미리 한 번 그려서 치른다. 만든 노드는 풀에 그대로
+# 남으므로 실제 아이템이 그걸 재사용한다. 숨기면(visible=false) 드로우가 안
+# 걸려 아무것도 안 구워지므로, 안 보이게 하는 수단은 크기다.
+const _WARM_SCALE := 0.01
+
+func warm_up() -> void:
+	if _items.is_empty():
+		var m := _make_item()
+		_items.append(m)
+		add_child(m)
+	if _lasers.is_empty():
+		var l := _make_laser()
+		_lasers.append(l)
+		add_child(l)
+	# 글리프 아틀라스는 글자 단위다. 한 글자만 구우면 나머지 넷은 각자
+	# 처음 떨어질 때 래스터화된다.
+	var letters := ""
+	for kind in [Item.P, Item.E, Item.S, Item.C, Item.L]:
+		letters += Item.letter(kind)
+	(_items[0].get_node("Label") as Label3D).text = letters
+	for m in [_items[0], _lasers[0]]:
+		# 화면 밖이면 컬링돼 드로우가 안 걸린다. 패들 자리는 확실히 화면 안이다.
+		m.position = board_to_local(Vector2(0.0, Tuning.PADDLE_HOME_V))
+		m.scale = Vector3.ONE * _WARM_SCALE
+		m.visible = true
+
+func end_warm_up() -> void:
+	for pool in [_items, _lasers]:
+		if (pool as Array).is_empty():
+			continue
+		var m := pool[0] as MeshInstance3D
+		m.scale = Vector3.ONE
+		m.visible = false
+
 func sync(field: PlayField) -> void:
 	refresh_bricks(field.grid)
 	sync_items(field)

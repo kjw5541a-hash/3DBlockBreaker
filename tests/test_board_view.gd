@@ -14,6 +14,8 @@ func _initialize() -> void:
 	_test_item_meshes_follow_the_field()
 	_test_paddle_mesh_widens_with_enlarge()
 	_test_laser_meshes_follow_the_field()
+	_test_warm_up_draws_every_item_letter()
+	_test_warm_up_hands_the_pool_back_intact()
 	print("test_board_view: OK")
 	quit()
 
@@ -203,4 +205,62 @@ func _test_laser_meshes_follow_the_field() -> void:
 	f.lasers.clear()
 	view.sync_lasers(f)
 	assert(view.laser_count() == 0, "레이저가 다 사라졌는데 메시가 %d 개 남았다" % view.laser_count())
+	view.free()
+
+# 웹 빌드는 GL Compatibility 로 떨어져 재질 조합마다 셰이더를 첫 드로우 때
+# 컴파일하고, Label3D 는 글자를 처음 그릴 때 64px 로 래스터화한다. 그 비용이
+# 아이템이 처음 떨어지는 순간에 몰리면 프레임이 멎는다. 미리 굽는 것이므로
+# 글자 하나라도 빠지면 그 아이템에서 끊김이 그대로 남는다 — 전부 확인한다.
+func _test_warm_up_draws_every_item_letter() -> void:
+	var view := BoardView.new()
+	root.add_child(view)
+	var g := BrickGrid.new()
+	g.fill_all(0)
+	view.build(g)
+	view.warm_up()
+	var label := view._items[0].get_node("Label") as Label3D
+	for kind in [Item.P, Item.E, Item.S, Item.C, Item.L]:
+		assert(label.text.contains(Item.letter(kind)),
+			"워밍업 글자에 %s 가 빠졌다: %s" % [Item.letter(kind), label.text])
+	# 실제로 그려져야 컴파일이 걸린다. 숨겨 두면 워밍업이 아무 일도 안 한다.
+	assert(view._items[0].visible, "워밍업 아이템이 안 보이면 셰이더가 안 구워진다")
+	assert(view._lasers[0].visible, "워밍업 레이저가 안 보이면 셰이더가 안 구워진다")
+	# 눈에 띄면 타이틀 화면에 유령 아이템이 떠 있는 꼴이 된다.
+	assert(view._items[0].scale.x < 0.1,
+		"워밍업 아이템이 실제 크기라 화면에 보인다: %s" % view._items[0].scale)
+	assert(view.item_count() == 0,
+		"워밍업 메시가 진짜 아이템으로 세어졌다: %d" % view.item_count())
+	view.free()
+
+# 워밍업은 풀에 그대로 남아 첫 아이템이 재사용한다 — 그게 컴파일을 한 번만
+# 치르는 방법이다. 대신 크기와 글자를 원상복구 못 하면 첫 아이템이 점으로
+# 나오거나 글자가 "PESCL" 인 채로 떨어진다.
+func _test_warm_up_hands_the_pool_back_intact() -> void:
+	var view := BoardView.new()
+	root.add_child(view)
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	view.build(f.grid)
+	view.warm_up()
+	view.end_warm_up()
+	assert(not view._items[0].visible, "워밍업이 끝났는데 아이템이 화면에 남아 있다")
+	assert(not view._lasers[0].visible, "워밍업이 끝났는데 레이저가 화면에 남아 있다")
+
+	f.items.append({"pos": Vector2(1.0, 6.0), "kind": Item.S})
+	f.lasers.append(Vector2(0.0, 5.0))
+	view.sync_items(f)
+	view.sync_lasers(f)
+	assert(view._items.size() == 1,
+		"워밍업 메시를 안 쓰고 새로 만들었다 — 컴파일을 두 번 친다: %d" % view._items.size())
+	assert(view._lasers.size() == 1,
+		"워밍업 레이저를 안 쓰고 새로 만들었다: %d" % view._lasers.size())
+	assert(view._items[0].visible and view._lasers[0].visible,
+		"진짜 아이템/레이저인데 워밍업 상태로 숨겨져 있다")
+	assert(is_equal_approx(view._items[0].scale.x, 1.0),
+		"진짜 아이템이 워밍업 크기 그대로다: %s" % view._items[0].scale)
+	assert(is_equal_approx(view._lasers[0].scale.x, 1.0),
+		"진짜 레이저가 워밍업 크기 그대로다: %s" % view._lasers[0].scale)
+	assert((view._items[0].get_node("Label") as Label3D).text == "S",
+		"워밍업 글자가 진짜 아이템에 그대로 남았다: %s"
+		% (view._items[0].get_node("Label") as Label3D).text)
 	view.free()
