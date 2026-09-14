@@ -97,3 +97,9 @@ offset_right = 620.0
 offset_bottom = 1268.0
 theme_override_font_sizes/font_size = 24
 text = "dev"
+
+[node name="FireFlash" type="ColorRect" parent="HUD"]
+mouse_filter = 2
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(1, 0.55, 0.15, 0)

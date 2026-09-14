@@ -14,6 +14,10 @@ var riding: bool = false
 # 목숨을 잃은 직후, 새 공이 패들 위로 떨어져 내리는 중이다. attached 와
 # 배타적이다 — 착지하면 _attach() 가 이 값을 끈다.
 var dropping: bool = false
+# 불타는 공. 블럭을 안 튕기고 뚫는다. 타이머가 없다 — 패들에 닿을 때마다
+# 접촉 위치로 다시 판정하므로, 정확히 받으면 붙고 빗맞으면 그 자리에서
+# 꺼진다. 그 밖에 꺼지는 자리는 목숨 상실과 Catch 로 붙잡을 때뿐이다.
+var burning: bool = false
 var lives: int = Tuning.LIVES
 # 공이 살아 있던 누적 시간. 잘 맞은 공의 상한이 이 값으로 오른다.
 var elapsed: float = 0.0
@@ -57,6 +61,7 @@ func _attach() -> void:
 	attached = true
 	riding = false
 	dropping = false
+	burning = false
 	ball_vel = Vector2.ZERO
 	_attach_offset_u = 0.0
 	ball_pos = paddle.pos + Vector2(0.0, Tuning.PADDLE_THICKNESS * 0.5 + Tuning.BALL_RADIUS)
@@ -69,6 +74,7 @@ func _spawn_dropping() -> void:
 	attached = false
 	riding = false
 	dropping = true
+	burning = false
 	ball_vel = Vector2.ZERO
 	ball_pos = Vector2(paddle.pos.x,
 		paddle.pos.y + Tuning.PADDLE_THICKNESS * 0.5 + Tuning.BALL_RADIUS + DROP_HEIGHT)
@@ -99,7 +105,7 @@ func step(target: Vector2, dt: float) -> Dictionary:
 		(Tuning.ITEM_ENLARGE_MULT if active_item == Item.E else 1.0)
 	paddle.update(target, dt)
 	var out := {"paddle_hit": false, "wall_hit": false, "bricks_hit": 0, "broken": [],
-		"items_taken": [], "lost": false, "cleared": false}
+		"items_taken": [], "lost": false, "cleared": false, "ignited": false}
 	# 아이템은 공과 독립이다. 공이 발사 전에 붙어 있든 목숨을 잃어 새 공이
 	# 낙하 중이든 화면의 아이템은 계속 내려와야 한다 — 그래서 아래 조기
 	# 반환들보다 앞이다. 레이저와 쿨다운도 같은 이유로 여기 있다.
@@ -155,7 +161,20 @@ func step(target: Vector2, dt: float) -> Dictionary:
 			out["wall_hit"] = true
 
 		var q := grid.query(ball_pos, Tuning.BALL_RADIUS)
-		if q["hit"]:
+		if q["hit"] and burning \
+				and grid.get_cell(q["col"], q["row"]) != BrickGrid.INDESTRUCTIBLE:
+			# 뚫는다. 반사도 위치 보정도 없어 방향과 속력이 그대로다 — 손실원은
+			# 여전히 패들뿐이다. 칸이 즉시 0 이 되므로 다음 서브스텝의 query 가
+			# 같은 칸을 다시 잡지 않는다. _last_damaged 디바운스가 필요 없는 것도
+			# 그래서다.
+			var kind := grid.get_cell(q["col"], q["row"])
+			grid.destroy(q["col"], q["row"])
+			(out["broken"] as Array).append(
+				{"col": q["col"], "row": q["row"], "kind": kind})
+			out["bricks_hit"] = (out["broken"] as Array).size()
+			_spawn_item(q["col"], q["row"])
+			_last_damaged = -1
+		elif q["hit"]:
 			var i := BrickGrid.index(q["col"], q["row"])
 			# 정지에 가까운 공은 블럭 위에 얹힌 채 중력에 매 프레임 다시
 			# 파고든다 — 그때마다 hit() 을 부르면 여러 히트짜리 블럭이 몇
@@ -191,6 +210,8 @@ func step(target: Vector2, dt: float) -> Dictionary:
 				out["paddle_hit"] = true
 				attached = true
 				riding = false
+				# 붙잡은 공은 튕긴 것이 아니라 정확도를 매길 근거가 없다.
+				burning = false
 				_attach_offset_u = clampf(ball_pos.x - paddle.pos.x,
 					-paddle.half_width, paddle.half_width)
 				ball_vel = Vector2.ZERO
@@ -203,6 +224,13 @@ func step(target: Vector2, dt: float) -> Dictionary:
 				Tuning.v_max_at(elapsed), paddle.restitution(ball_pos.x))
 			if ball_vel != before:
 				out["paddle_hit"] = true
+				# 불은 접촉마다 다시 판정한다. 지속 시간도 남은 횟수도 없다 —
+				# "정확히 받으면 붙고 빗맞으면 꺼진다"가 규칙의 전부다.
+				burning = paddle.sweet_spot(ball_pos.x)
+				# 이미 타는 중에 또 정확히 받아도 신호를 낸다. 같은 성취에
+				# 같은 피드백이 나와야 한다 — 연속으로 잘 받았을 때만 화면이
+				# 조용하면 플레이어는 그걸 버그로 읽는다.
+				out["ignited"] = burning
 				# 패들 표면 밖으로 꺼내 다음 스텝에 다시 물리지 않게 한다.
 				ball_pos.y = paddle.pos.y + Tuning.PADDLE_THICKNESS * 0.5 + Tuning.BALL_RADIUS
 

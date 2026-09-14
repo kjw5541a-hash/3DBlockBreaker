@@ -41,6 +41,15 @@ func _initialize() -> void:
 	_test_laser_travels_at_a_constant_speed()
 	_test_laser_breaks_a_brick_and_is_consumed()
 	_test_laser_disappears_past_the_top_wall()
+	_test_a_centered_bounce_lights_the_ball()
+	_test_an_edge_bounce_puts_the_fire_out()
+	_test_ignition_is_reported_when_it_happens()
+	_test_a_burning_ball_goes_straight_through_a_brick()
+	_test_fire_takes_a_hard_brick_in_one_pass()
+	_test_the_indestructible_still_stops_a_burning_ball()
+	_test_a_pierced_brick_still_drops_its_item()
+	_test_losing_a_life_puts_the_fire_out()
+	_test_catching_the_ball_puts_the_fire_out()
 	print("test_play_field: OK")
 	quit()
 
@@ -817,3 +826,142 @@ func _test_laser_disappears_past_the_top_wall() -> void:
 	f.lasers.append(Vector2(0.0, Tuning.BOARD_TOP_V - 0.05))
 	f.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), DT)
 	assert(f.lasers.is_empty(), "판 위로 나간 레이저가 안 사라졌다")
+
+# --- 불타는 공. 패들 한가운데로 정확히 받으면 붙고, 블럭을 안 튕기고 뚫는다.
+
+# 패들 중심에서 offset 만큼 옆으로 공을 떨어뜨려 한 번 받게 한다. 받은
+# 직후의 필드를 그대로 돌려준다 — 불이 붙었는지는 호출하는 쪽이 본다.
+var _hit_result: Dictionary = {}
+
+func _bounce_at(offset_u: float) -> PlayField:
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	f.attached = false
+	f.paddle.pos.y = Tuning.PADDLE_BAND_MIN_V
+	f.ball_pos = Vector2(offset_u, Tuning.PADDLE_BAND_MIN_V + 0.6)
+	f.ball_vel = Vector2(0.0, -Tuning.v_min())
+	for i in 240:
+		var r := f.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), DT)
+		if r["paddle_hit"]:
+			_hit_result = r
+			return f
+		if r["lost"]:
+			break
+	assert(false, "패들에 안 맞았다 (offset %f)" % offset_u)
+	return f
+
+func _test_a_centered_bounce_lights_the_ball() -> void:
+	var f := _bounce_at(0.0)
+	assert(f.burning, "패들 정중앙으로 받았는데 불이 안 붙었다")
+
+# 규칙 전체가 이 한 줄이다: 패들에 닿을 때마다 다시 판정한다. 타이머가
+# 없으므로 불을 끄는 것도 여기뿐이다(목숨 상실·붙잡기 제외).
+func _test_an_edge_bounce_puts_the_fire_out() -> void:
+	var f := _bounce_at(0.5)
+	assert(not f.burning, "패들 가장자리로 받았는데 불이 붙었다")
+	# 이미 타고 있던 공도 못 맞히면 꺼진다.
+	f.burning = true
+	f.ball_pos = Vector2(0.5, Tuning.PADDLE_BAND_MIN_V + 0.6)
+	f.ball_vel = Vector2(0.0, -Tuning.v_min())
+	for i in 240:
+		if bool(f.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), DT)["paddle_hit"]):
+			break
+	assert(not f.burning, "타던 공을 가장자리로 받았는데 불이 안 꺼졌다")
+
+# 화면 번쩍임과 연출이 이 신호를 탄다. paddle_hit 만으로는 구별이 안 된다.
+func _test_ignition_is_reported_when_it_happens() -> void:
+	_bounce_at(0.0)
+	assert(bool(_hit_result["ignited"]), "불이 붙었는데 신호가 안 났다")
+	_bounce_at(0.5)
+	assert(not bool(_hit_result["ignited"]), "가장자리로 받았는데 점화 신호가 났다")
+
+# 격자 한가운데 블럭 하나를 두고 아래에서 위로 쏜다. 20 프레임이면 블럭
+# 높이를 지나칠 만큼 올라간다 — 뚫었으면 위에, 튕겼으면 아래에 있다.
+func _run_into_one_brick(burning: bool, kind: int) -> PlayField:
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	f.grid.cells[BrickGrid.index(5, 0)] = kind
+	f.attached = false
+	f.burning = burning
+	var rect := BrickGrid.cell_rect(5, 0)
+	var cx := rect.position.x + rect.size.x * 0.5
+	f.ball_pos = Vector2(cx, Tuning.BRICK_BOTTOM_V - 0.6)
+	f.ball_vel = Vector2(0.0, 14.0)
+	for i in 20:
+		f.step(Vector2(cx, Tuning.PADDLE_HOME_V), DT)
+	return f
+
+func _test_a_burning_ball_goes_straight_through_a_brick() -> void:
+	var normal := _run_into_one_brick(false, 1)
+	assert(normal.ball_vel.y < 0.0,
+		"테스트 전제가 깨졌다 — 평범한 공이 블럭에 안 튕겼다: %s" % normal.ball_vel)
+	assert(normal.ball_pos.y < Tuning.BRICK_BOTTOM_V,
+		"튕긴 공이 격자 위에 남았다: %f" % normal.ball_pos.y)
+
+	var fire := _run_into_one_brick(true, 1)
+	assert(fire.grid.get_cell(5, 0) == 0, "불타는 공이 블럭을 안 깼다")
+	assert(fire.ball_vel.y > 0.0,
+		"뚫었는데 방향이 바뀌었다: %s" % fire.ball_vel)
+	assert(fire.ball_pos.y > Tuning.BRICK_BOTTOM_V + BrickGrid.CELL_H,
+		"뚫었다면서 블럭 자리를 못 지나갔다: %f" % fire.ball_pos.y)
+
+func _test_fire_takes_a_hard_brick_in_one_pass() -> void:
+	var f := _run_into_one_brick(true, BrickGrid.MAX_HARD)
+	assert(f.grid.get_cell(5, 0) == 0,
+		"단단 블럭이 한 번에 안 뚫렸다: %d" % f.grid.get_cell(5, 0))
+	assert(f.ball_vel.y > 0.0, "단단 블럭을 뚫었는데 튕겼다: %s" % f.ball_vel)
+
+# 불괴는 불에도 벽이다. 이게 뚫리면 배치로 난이도를 주던 수단이 사라진다.
+func _test_the_indestructible_still_stops_a_burning_ball() -> void:
+	var f := _run_into_one_brick(true, BrickGrid.INDESTRUCTIBLE)
+	assert(f.grid.get_cell(5, 0) == BrickGrid.INDESTRUCTIBLE, "불괴 블럭이 뚫렸다")
+	assert(f.ball_vel.y < 0.0, "불괴 블럭에 안 튕겼다: %s" % f.ball_vel)
+	assert(f.burning, "불괴에 막혔다고 불까지 꺼졌다 — 불을 끄는 것은 패들뿐이다")
+
+func _test_a_pierced_brick_still_drops_its_item() -> void:
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	f.grid.cells[BrickGrid.index(5, 0)] = 1
+	f.grid.item_cells[BrickGrid.index(5, 0)] = Item.P
+	f.attached = false
+	f.burning = true
+	var rect := BrickGrid.cell_rect(5, 0)
+	var cx := rect.position.x + rect.size.x * 0.5
+	f.ball_pos = Vector2(cx, Tuning.BRICK_BOTTOM_V - 0.6)
+	f.ball_vel = Vector2(0.0, 14.0)
+	for i in 20:
+		f.step(Vector2(cx, Tuning.PADDLE_HOME_V), DT)
+	assert(f.items.size() == 1, "뚫어서 깬 블럭이 아이템을 안 떨궜다: %d" % f.items.size())
+
+func _test_losing_a_life_puts_the_fire_out() -> void:
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	f.attached = false
+	f.burning = true
+	f.ball_pos = Vector2(3.0, 1.0)
+	f.ball_vel = Vector2(0.0, -6.0)
+	var lost := false
+	for i in 240:
+		if bool(f.step(Vector2(0.0, Tuning.PADDLE_HOME_V), DT)["lost"]):
+			lost = true
+			break
+	assert(lost, "공이 데드존까지 안 내려갔다")
+	assert(not f.burning, "새 공이 불타는 채로 나왔다")
+
+# 붙잡은 공은 튕긴 것이 아니라 정확도를 매길 근거가 없다. 발사는 타격이
+# 아니므로 불도 안 붙고, 들고 있던 불은 꺼진다.
+func _test_catching_the_ball_puts_the_fire_out() -> void:
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	f.active_item = Item.C
+	f.attached = false
+	f.burning = true
+	f.paddle.pos.y = Tuning.PADDLE_BAND_MIN_V
+	f.ball_pos = Vector2(0.0, Tuning.PADDLE_BAND_MIN_V + 0.6)
+	f.ball_vel = Vector2(0.0, -Tuning.v_min())
+	for i in 240:
+		f.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), DT)
+		if f.attached:
+			break
+	assert(f.attached, "Catch 가 켜져 있는데 공이 안 붙었다")
+	assert(not f.burning, "붙잡은 공이 아직 불타고 있다")
