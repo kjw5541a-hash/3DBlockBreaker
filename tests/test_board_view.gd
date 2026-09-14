@@ -13,6 +13,7 @@ func _initialize() -> void:
 	_test_brick_break_spawns_fragments()
 	_test_item_meshes_follow_the_field()
 	_test_paddle_mesh_widens_with_enlarge()
+	_test_the_paddle_mesh_matches_the_hit_box()
 	_test_laser_meshes_follow_the_field()
 	_test_warm_up_draws_every_item_letter()
 	_test_warm_up_hands_the_pool_back_intact()
@@ -174,19 +175,60 @@ func _test_item_meshes_follow_the_field() -> void:
 	assert(view.item_count() == 0, "아이템이 다 사라졌는데 메시가 %d 개 남았다" % view.item_count())
 	view.free()
 
+# 눈에 보이는 폭은 메시 크기가 아니라 "메시 폭 x 스케일"이다. 메시가 상자에서
+# 조각한 모델로 바뀌어도 이 계약은 그대로 남아야 해서 이렇게 잰다.
+func _paddle_world_width(view: BoardView) -> float:
+	return view._paddle.mesh.get_aabb().size.x * view._paddle.scale.x
+
 func _test_paddle_mesh_widens_with_enlarge() -> void:
 	var view := BoardView.new()
 	root.add_child(view)
 	var f := PlayField.new()
 	f.grid.fill_all(0)
 	view.build(f.grid)
-	var base_size := (view._paddle.mesh as BoxMesh).size.x
+	view.sync(f)
+	var base_size := _paddle_world_width(view)
+	assert(is_equal_approx(base_size, Tuning.PADDLE_HALF_WIDTH * 2.0),
+		"기본 상태에서 보이는 폭이 판정 반폭과 다르다: %f" % base_size)
 	f.active_item = Item.E
 	f.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), 1.0 / 120.0)
 	view.sync(f)
-	var widened_size := (view._paddle.mesh as BoxMesh).size.x
+	var widened_size := _paddle_world_width(view)
+	assert(is_equal_approx(widened_size, f.paddle.half_width * 2.0),
+		"Enlarge 뒤 보이는 폭이 판정 반폭과 어긋난다: %f vs %f"
+		% [widened_size, f.paddle.half_width * 2.0])
 	assert(widened_size > base_size,
-		"Enlarge 가 활성인데 패들 메시가 그대로다: %f -> %f" % [base_size, widened_size])
+		"Enlarge 가 활성인데 패들이 그대로다: %f -> %f" % [base_size, widened_size])
+	view.free()
+
+# 패들은 이제 Blender 에서 조각한 메시다. 두께와 깊이가 판정 상자와 어긋나면
+# 눈으로 받은 자리와 실제로 맞는 자리가 달라진다. 축 변환(Blender Z-up ->
+# Godot Y-up)이 틀어지면 바로 여기서 걸린다.
+func _test_the_paddle_mesh_matches_the_hit_box() -> void:
+	var view := BoardView.new()
+	root.add_child(view)
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	view.build(f.grid)
+	var aabb := view._paddle.mesh.get_aabb()
+	assert(is_equal_approx(aabb.size.x, Tuning.PADDLE_HALF_WIDTH * 2.0),
+		"메시 폭이 판정 폭과 다르다: %f" % aabb.size.x)
+	assert(is_equal_approx(aabb.size.y, Tuning.PADDLE_THICKNESS),
+		"메시 두께가 PADDLE_THICKNESS 와 다르다: %f" % aabb.size.y)
+	assert(is_equal_approx(aabb.position.y + aabb.size.y * 0.5, 0.0),
+		"메시가 원점 기준으로 안 맞춰져 있다: %f" % aabb.position.y)
+	# 프레임과 러버 두 면. 하나로 합쳐지면 러버 색을 따로 못 준다.
+	assert(view._paddle.mesh.get_surface_count() == 2,
+		"패들 메시 면이 %d 개다 — 프레임/러버 두 면이어야 한다"
+		% view._paddle.mesh.get_surface_count())
+
+	# 러버 면은 공이 닿는 윗면이고, 지금까지의 패들 색(0.6, 0.85, 1.0)을 그대로
+	# 물려받는다. 파괴 조각도 같은 색이라 둘이 어긋나면 부서질 때 색이 튄다.
+	for i in view._paddle.mesh.get_surface_count():
+		var is_rubber := view._paddle.mesh.surface_get_material(i).resource_name == "ice"
+		var shown := (view._paddle.get_surface_override_material(i) as StandardMaterial3D).albedo_color
+		assert(is_rubber == (shown == Color(0.6, 0.85, 1.0)),
+			"면 %d 의 색이 뒤바뀌었다 — 러버=%s 인데 색은 %s" % [i, is_rubber, shown])
 	view.free()
 
 func _test_laser_meshes_follow_the_field() -> void:

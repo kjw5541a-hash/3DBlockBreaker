@@ -308,8 +308,10 @@ func sync(field: PlayField) -> void:
 	# 기울기를 눈에 보이게 한다. 법선과 같은 부호 규약을 쓴다.
 	_paddle.rotation = Vector3(0.0, 0.0, -deg_to_rad(field.paddle.tilt_deg))
 	# Enlarge 로 반폭이 바뀌면 메시도 따라간다 — 안 그러면 판정 상자와
-	# 눈에 보이는 크기가 어긋난다.
-	(_paddle.mesh as BoxMesh).size.x = field.paddle.half_width * 2.0
+	# 눈에 보이는 크기가 어긋난다. 조각한 메시는 크기를 못 바꾸므로 늘린다.
+	# 굴린 끝 모서리까지 같이 늘어나지만 1.5 배라 눈에 안 띈다 — 거슬리면
+	# 끝단 두 조각을 떼어 내고 가운데만 늘리는 3분할로 바꾸면 된다.
+	_paddle.scale.x = field.paddle.half_width / Tuning.PADDLE_HALF_WIDTH
 
 func _make_brick(col: int, row: int, kind: int) -> MeshInstance3D:
 	var rect := BrickGrid.cell_rect(col, row)
@@ -368,12 +370,29 @@ func _make_ball() -> MeshInstance3D:
 	m.material_override = mat
 	return m
 
+# Blender 에서 조각한 패들. 모서리를 굴린 프레임 위에 러버 면을 얹은 탁구
+# 배트 형태라 상자로는 못 만든다. 치수는 판정 상자와 같게 맞춰 내보냈다
+# (1.28 x 0.30 x 0.60) — test_board_view 가 그걸 지킨다.
+const PADDLE_MODEL := "res://assets/paddle.glb"
+
 func _make_paddle() -> MeshInstance3D:
-	var mesh := BoxMesh.new()
-	mesh.size = Vector3(Tuning.PADDLE_HALF_WIDTH * 2.0, Tuning.PADDLE_THICKNESS, 0.6)
+	var scene := (load(PADDLE_MODEL) as PackedScene).instantiate()
+	var mesh := (scene.get_child(0) as MeshInstance3D).mesh
+	scene.free()
 	var m := MeshInstance3D.new()
 	m.mesh = mesh
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.6, 0.85, 1.0)
-	m.material_override = mat
+	# glTF 가 실어 온 재질은 금속성이 높다. 웹 빌드의 GL Compatibility 에는
+	# 반사 환경이 없어 금속이 검게 죽으므로, 여기서 코드 재질로 덮는다.
+	# 면 순서가 아니라 이름으로 고르는 것은, 모델을 다시 내보내면 순서가
+	# 조용히 바뀌어도 색이 안 뒤집히게 하려는 것이다.
+	for i in mesh.get_surface_count():
+		var src := mesh.surface_get_material(i)
+		m.set_surface_override_material(i,
+			_paddle_material(Color(0.6, 0.85, 1.0) if src.resource_name == "ice"
+				else Color(0.30, 0.40, 0.55)))
 	return m
+
+func _paddle_material(albedo: Color) -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = albedo
+	return mat
