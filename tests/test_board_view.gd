@@ -14,6 +14,7 @@ func _initialize() -> void:
 	_test_item_meshes_follow_the_field()
 	_test_paddle_mesh_widens_with_enlarge()
 	_test_the_paddle_mesh_matches_the_hit_box()
+	_test_the_bat_face_looks_at_the_bricks()
 	_test_laser_meshes_follow_the_field()
 	_test_warm_up_draws_every_item_letter()
 	_test_warm_up_hands_the_pool_back_intact()
@@ -213,8 +214,10 @@ func _test_the_paddle_mesh_matches_the_hit_box() -> void:
 	var aabb := view._paddle.mesh.get_aabb()
 	assert(is_equal_approx(aabb.size.x, Tuning.PADDLE_HALF_WIDTH * 2.0),
 		"메시 폭이 판정 폭과 다르다: %f" % aabb.size.x)
-	assert(is_equal_approx(aabb.size.y, Tuning.PADDLE_THICKNESS),
-		"메시 두께가 PADDLE_THICKNESS 와 다르다: %f" % aabb.size.y)
+	# 판정 상자의 세로 두께는 판 위 높이가 아니라 판을 따라가는 깊이(v)다.
+	# board_to_local 이 v 를 -z 로 보내므로 메시의 z 범위가 그 두께여야 한다.
+	assert(is_equal_approx(aabb.size.z, Tuning.PADDLE_THICKNESS),
+		"메시 깊이가 PADDLE_THICKNESS 와 다르다: %f" % aabb.size.z)
 	assert(is_equal_approx(aabb.position.y + aabb.size.y * 0.5, 0.0),
 		"메시가 원점 기준으로 안 맞춰져 있다: %f" % aabb.position.y)
 	# 프레임과 러버 두 면. 하나로 합쳐지면 러버 색을 따로 못 준다.
@@ -229,6 +232,33 @@ func _test_the_paddle_mesh_matches_the_hit_box() -> void:
 		var shown := (view._paddle.get_surface_override_material(i) as StandardMaterial3D).albedo_color
 		assert(is_rubber == (shown == Color(0.6, 0.85, 1.0)),
 			"면 %d 의 색이 뒤바뀌었다 — 러버=%s 인데 색은 %s" % [i, is_rubber, shown])
+	view.free()
+
+# 공은 판 평면을 따라 올라왔다 내려온다. 그래서 공이 실제로 때리는 면은
+# 카메라를 보는 윗면이 아니라 벽돌 쪽(+v)을 보는 면이다. 배트 면(러버)이
+# 거기 붙어 있지 않으면 "넓은 면으로 받는다"는 형태의 의미가 사라진다.
+# board_to_local 이 v 를 -z 로 보내므로 러버는 -z 쪽에 있어야 한다.
+func _test_the_bat_face_looks_at_the_bricks() -> void:
+	var view := BoardView.new()
+	root.add_child(view)
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	view.build(f.grid)
+	var mesh := view._paddle.mesh
+	var checked := 0
+	for i in mesh.get_surface_count():
+		if mesh.surface_get_material(i).resource_name != "ice":
+			continue
+		checked += 1
+		var verts: PackedVector3Array = mesh.surface_get_arrays(i)[Mesh.ARRAY_VERTEX]
+		var min_z := INF
+		for v in verts:
+			min_z = minf(min_z, v.z)
+		assert(min_z <= mesh.get_aabb().position.z + 0.001,
+			"때리는 면이 프레임이다 — 러버가 %f 까지밖에 안 오는데 앞면은 %f 다"
+			% [min_z, mesh.get_aabb().position.z])
+	# 러버 면이 아예 없으면 위 루프가 한 번도 안 돌아 테스트가 헛통과한다.
+	assert(checked == 1, "러버 면이 %d 개다 — 하나여야 한다" % checked)
 	view.free()
 
 func _test_laser_meshes_follow_the_field() -> void:
