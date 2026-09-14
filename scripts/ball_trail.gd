@@ -26,7 +26,11 @@ static func _t(speed: float) -> float:
 static func sample_count(speed: float) -> int:
 	return int(round(lerpf(float(MIN_SAMPLES), float(MAX_SAMPLES), _t(speed))))
 
-static func color_for(speed: float) -> Color:
+# 불타는 동안은 속도계 노릇을 잠깐 그만둔다. 속도는 리본 길이로도 읽히지만
+# 불은 몇 초짜리 상태라, 지금 블럭을 뚫는 중인지가 더 급한 정보다.
+static func color_for(speed: float, burning: bool = false) -> Color:
+	if burning:
+		return Tuning.FIRE_COLOR
 	return Color(0.35, 0.45, 0.7).lerp(Color(1.0, 0.9, 0.5), _t(speed))
 
 func point_count() -> int:
@@ -38,11 +42,11 @@ func reset() -> void:
 	_points.clear()
 	_mesh.clear_surfaces()
 
-func push(p: Vector2, speed: float) -> void:
+func push(p: Vector2, speed: float, burning: bool = false) -> void:
 	_points.push_back(p)
 	while _points.size() > sample_count(speed):
 		_points.pop_front()
-	_redraw(color_for(speed))
+	_redraw(color_for(speed, burning))
 
 # 판 로컬 평면 위에 리본 하나를 그린다. 판이 기울어져 있으므로 리본도
 # 같이 기울어 보인다 — 별도 처리가 필요 없다.

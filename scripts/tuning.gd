@@ -48,6 +48,13 @@ const PADDLE_RESTITUTION := 0.80
 # 손실을 안 보는 것으로 표현한다.
 const PADDLE_RESTITUTION_EDGE := 0.45
 const PADDLE_SPEED_TRANSFER := 0.60
+# 불타는 공이 붙는 판정창. 위 반발계수와 같은 정규화 오프셋을 쓴다 —
+# 0.25 면 그 지점 반발계수가 0.71 이라 "잘 받았다" 구간과 겹친다. 가운데로
+# 받는다는 하나의 실력이 두 보상을 준다.
+#
+# half_width 로 정규화하므로 Enlarge 를 먹으면 창도 1.5 배가 된다. 받기
+# 쉬워지는 아이템이 불도 내기 쉬워지는 것이라 성격이 맞다.
+const PADDLE_SWEET_SPOT := 0.25
 const PADDLE_HALF_WIDTH := 0.64
 const PADDLE_THICKNESS := 0.3
 const PADDLE_MAX_SPEED_U := 40.0
@@ -79,6 +86,13 @@ const PADDLE_SPRING_DAMPING := 0.3
 # 감쇠 진동은 수학적으로는 영원히 안 멈춘다.
 const PADDLE_SPRING_REST_POS := 0.01
 const PADDLE_SPRING_REST_VEL := 0.1
+
+# --- 불타는 공 ---
+# 점화 순간의 화면 번쩍임. HUD 의 ColorRect 알파가 이 값에서 0 으로 내려간다.
+# 길면 번쩍임이 아니라 화면이 밝아진 것으로 읽혀 블럭이 안 보인다.
+const FIRE_FLASH_SEC := 0.15
+const FIRE_FLASH_ALPHA := 0.45
+const FIRE_COLOR := Color(1.0, 0.55, 0.15)
 
 const LIVES := 3
 

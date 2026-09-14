@@ -17,6 +17,7 @@ func _run() -> void:
 	_test_title_screen_blocks_play_until_touched()
 	_test_physics_gated_until_started()
 	_test_warm_up_primes_the_trail_then_clears_it()
+	_test_ignition_flashes_the_screen()
 	await _test_screen_point_maps_to_board()
 	await _test_board_fits_in_camera()
 	print("test_game_smoke: OK")
@@ -307,4 +308,28 @@ func _test_stage_label_follows_the_stage_index() -> void:
 	g._update_hud()
 	assert(g.stage_label.text == "판 1",
 		"처음부터 다시인데 판 번호가 안 돌아왔다: %s" % g.stage_label.text)
+	g.free()
+
+# 점화는 몇 프레임 만에 지나가는 사건이라 공 색만으로는 놓치기 쉽다. 화면이
+# 한 번 번쩍여야 "방금 내가 잘 받았다"가 손가락과 연결된다.
+func _test_ignition_flashes_the_screen() -> void:
+	var packed := load("res://scenes/game.tscn") as PackedScene
+	var g := packed.instantiate()
+	root.add_child(g)
+	g._ready()
+	assert(is_zero_approx(g.fire_flash.color.a),
+		"시작부터 화면이 덮여 있다: %f" % g.fire_flash.color.a)
+	# 패들 정중앙 바로 위로 떨어뜨린다 — 스윗스팟 판정이 붙는 자리다.
+	g.field.attached = false
+	g.field.ball_pos = Vector2(g.field.paddle.pos.x,
+		g.field.paddle.pos.y + Tuning.PADDLE_THICKNESS * 0.5 + Tuning.BALL_RADIUS + 0.05)
+	g.field.ball_vel = Vector2(0.0, -6.0)
+	var flashed := false
+	for i in 60:
+		g.step_once(1.0 / 120.0)
+		if g.fire_flash.color.a > 0.0:
+			flashed = true
+			break
+	assert(flashed, "정중앙으로 받았는데 화면이 안 번쩍였다")
+	assert(g.field.burning, "번쩍였는데 공에 불이 안 붙었다")
 	g.free()

@@ -13,9 +13,13 @@ func _initialize() -> void:
 	_test_brick_break_spawns_fragments()
 	_test_item_meshes_follow_the_field()
 	_test_paddle_mesh_widens_with_enlarge()
+	_test_the_paddle_mesh_matches_the_hit_box()
+	_test_the_bat_face_looks_at_the_bricks()
 	_test_laser_meshes_follow_the_field()
 	_test_warm_up_draws_every_item_letter()
 	_test_warm_up_hands_the_pool_back_intact()
+	_test_the_ball_looks_different_while_it_burns()
+	_test_fire_costs_no_new_shader_variant()
 	print("test_board_view: OK")
 	quit()
 
@@ -174,19 +178,89 @@ func _test_item_meshes_follow_the_field() -> void:
 	assert(view.item_count() == 0, "아이템이 다 사라졌는데 메시가 %d 개 남았다" % view.item_count())
 	view.free()
 
+# 눈에 보이는 폭은 메시 크기가 아니라 "메시 폭 x 스케일"이다. 메시가 상자에서
+# 조각한 모델로 바뀌어도 이 계약은 그대로 남아야 해서 이렇게 잰다.
+func _paddle_world_width(view: BoardView) -> float:
+	return view._paddle.mesh.get_aabb().size.x * view._paddle.scale.x
+
 func _test_paddle_mesh_widens_with_enlarge() -> void:
 	var view := BoardView.new()
 	root.add_child(view)
 	var f := PlayField.new()
 	f.grid.fill_all(0)
 	view.build(f.grid)
-	var base_size := (view._paddle.mesh as BoxMesh).size.x
+	view.sync(f)
+	var base_size := _paddle_world_width(view)
+	assert(is_equal_approx(base_size, Tuning.PADDLE_HALF_WIDTH * 2.0),
+		"기본 상태에서 보이는 폭이 판정 반폭과 다르다: %f" % base_size)
 	f.active_item = Item.E
 	f.step(Vector2(0.0, Tuning.PADDLE_BAND_MIN_V), 1.0 / 120.0)
 	view.sync(f)
-	var widened_size := (view._paddle.mesh as BoxMesh).size.x
+	var widened_size := _paddle_world_width(view)
+	assert(is_equal_approx(widened_size, f.paddle.half_width * 2.0),
+		"Enlarge 뒤 보이는 폭이 판정 반폭과 어긋난다: %f vs %f"
+		% [widened_size, f.paddle.half_width * 2.0])
 	assert(widened_size > base_size,
-		"Enlarge 가 활성인데 패들 메시가 그대로다: %f -> %f" % [base_size, widened_size])
+		"Enlarge 가 활성인데 패들이 그대로다: %f -> %f" % [base_size, widened_size])
+	view.free()
+
+# 패들은 이제 Blender 에서 조각한 메시다. 두께와 깊이가 판정 상자와 어긋나면
+# 눈으로 받은 자리와 실제로 맞는 자리가 달라진다. 축 변환(Blender Z-up ->
+# Godot Y-up)이 틀어지면 바로 여기서 걸린다.
+func _test_the_paddle_mesh_matches_the_hit_box() -> void:
+	var view := BoardView.new()
+	root.add_child(view)
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	view.build(f.grid)
+	var aabb := view._paddle.mesh.get_aabb()
+	assert(is_equal_approx(aabb.size.x, Tuning.PADDLE_HALF_WIDTH * 2.0),
+		"메시 폭이 판정 폭과 다르다: %f" % aabb.size.x)
+	# 판정 상자의 세로 두께는 판 위 높이가 아니라 판을 따라가는 깊이(v)다.
+	# board_to_local 이 v 를 -z 로 보내므로 메시의 z 범위가 그 두께여야 한다.
+	assert(is_equal_approx(aabb.size.z, Tuning.PADDLE_THICKNESS),
+		"메시 깊이가 PADDLE_THICKNESS 와 다르다: %f" % aabb.size.z)
+	assert(is_equal_approx(aabb.position.y + aabb.size.y * 0.5, 0.0),
+		"메시가 원점 기준으로 안 맞춰져 있다: %f" % aabb.position.y)
+	# 프레임과 러버 두 면. 하나로 합쳐지면 러버 색을 따로 못 준다.
+	assert(view._paddle.mesh.get_surface_count() == 2,
+		"패들 메시 면이 %d 개다 — 프레임/러버 두 면이어야 한다"
+		% view._paddle.mesh.get_surface_count())
+
+	# 러버 면은 공이 닿는 윗면이고, 지금까지의 패들 색(0.6, 0.85, 1.0)을 그대로
+	# 물려받는다. 파괴 조각도 같은 색이라 둘이 어긋나면 부서질 때 색이 튄다.
+	for i in view._paddle.mesh.get_surface_count():
+		var is_rubber := view._paddle.mesh.surface_get_material(i).resource_name == "ice"
+		var shown := (view._paddle.get_surface_override_material(i) as StandardMaterial3D).albedo_color
+		assert(is_rubber == (shown == Color(0.6, 0.85, 1.0)),
+			"면 %d 의 색이 뒤바뀌었다 — 러버=%s 인데 색은 %s" % [i, is_rubber, shown])
+	view.free()
+
+# 공은 판 평면을 따라 올라왔다 내려온다. 그래서 공이 실제로 때리는 면은
+# 카메라를 보는 윗면이 아니라 벽돌 쪽(+v)을 보는 면이다. 배트 면(러버)이
+# 거기 붙어 있지 않으면 "넓은 면으로 받는다"는 형태의 의미가 사라진다.
+# board_to_local 이 v 를 -z 로 보내므로 러버는 -z 쪽에 있어야 한다.
+func _test_the_bat_face_looks_at_the_bricks() -> void:
+	var view := BoardView.new()
+	root.add_child(view)
+	var f := PlayField.new()
+	f.grid.fill_all(0)
+	view.build(f.grid)
+	var mesh := view._paddle.mesh
+	var checked := 0
+	for i in mesh.get_surface_count():
+		if mesh.surface_get_material(i).resource_name != "ice":
+			continue
+		checked += 1
+		var verts: PackedVector3Array = mesh.surface_get_arrays(i)[Mesh.ARRAY_VERTEX]
+		var min_z := INF
+		for v in verts:
+			min_z = minf(min_z, v.z)
+		assert(min_z <= mesh.get_aabb().position.z + 0.001,
+			"때리는 면이 프레임이다 — 러버가 %f 까지밖에 안 오는데 앞면은 %f 다"
+			% [min_z, mesh.get_aabb().position.z])
+	# 러버 면이 아예 없으면 위 루프가 한 번도 안 돌아 테스트가 헛통과한다.
+	assert(checked == 1, "러버 면이 %d 개다 — 하나여야 한다" % checked)
 	view.free()
 
 func _test_laser_meshes_follow_the_field() -> void:
@@ -263,4 +337,46 @@ func _test_warm_up_hands_the_pool_back_intact() -> void:
 	assert((view._items[0].get_node("Label") as Label3D).text == "S",
 		"워밍업 글자가 진짜 아이템에 그대로 남았다: %s"
 		% (view._items[0].get_node("Label") as Label3D).text)
+	view.free()
+
+# 불이 붙었다는 것은 블럭을 뚫는다는 뜻이라, 화면 번쩍임이 지나간 뒤에도
+# 공만 보고 지금 상태를 알 수 있어야 한다.
+func _test_the_ball_looks_different_while_it_burns() -> void:
+	var view := BoardView.new()
+	root.add_child(view)
+	var f := PlayField.new()
+	view.build(f.grid)
+	view.sync(f)
+	var normal := (view._ball.material_override as StandardMaterial3D).albedo_color
+	f.burning = true
+	view.sync(f)
+	var fire := (view._ball.material_override as StandardMaterial3D).albedo_color
+	assert(fire.is_equal_approx(Tuning.FIRE_COLOR), "불타는 공이 불 색이 아니다: %s" % fire)
+	assert(not fire.is_equal_approx(normal), "불이 붙었는데 공 색이 그대로다: %s" % fire)
+	f.burning = false
+	view.sync(f)
+	var back := (view._ball.material_override as StandardMaterial3D).albedo_color
+	assert(back.is_equal_approx(normal), "불이 꺼졌는데 공이 계속 탄다: %s" % back)
+	view.free()
+
+# 두 재질의 기능 조합이 같아야 한다. 다르면 첫 점화에서 셰이더 변종이 새로
+# 컴파일돼, 하필 화면이 번쩍이고 블럭이 뚫리는 순간에 프레임이 멎는다.
+# 아이템처럼 미리 그려 굽는 방법도 있지만, 색만 다르게 두면 구울 것 자체가
+# 안 생긴다 — 타이틀 화면에서 이미 그려지는 공 하나로 끝난다.
+func _test_fire_costs_no_new_shader_variant() -> void:
+	var view := BoardView.new()
+	root.add_child(view)
+	var f := PlayField.new()
+	view.build(f.grid)
+	view.sync(f)
+	var normal := view._ball.material_override as StandardMaterial3D
+	f.burning = true
+	view.sync(f)
+	var fire := view._ball.material_override as StandardMaterial3D
+	assert(fire != normal, "테스트가 같은 재질을 두 번 보고 있다")
+	assert(fire.emission_enabled == normal.emission_enabled,
+		"emission 여부가 달라 셰이더 변종이 갈린다")
+	assert(fire.shading_mode == normal.shading_mode, "셰이딩 모드가 달라 변종이 갈린다")
+	assert(fire.transparency == normal.transparency, "투명도 모드가 달라 변종이 갈린다")
+	assert(fire.cull_mode == normal.cull_mode, "컬 모드가 달라 변종이 갈린다")
 	view.free()

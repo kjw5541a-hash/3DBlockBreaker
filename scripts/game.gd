@@ -6,6 +6,7 @@ extends Node3D
 @onready var version_label: Label = $HUD/Version
 @onready var stage_label: Label = $HUD/Stage
 @onready var title_screen: Control = $HUD/TitleScreen
+@onready var fire_flash: ColorRect = $HUD/FireFlash
 @onready var _sfx_paddle_hit: AudioStreamPlayer = $Sfx/PaddleHit
 @onready var _sfx_wall_hit: AudioStreamPlayer = $Sfx/WallHit
 @onready var _sfx_brick_break: AudioStreamPlayer = $Sfx/BrickBreak
@@ -52,6 +53,8 @@ func step_once(delta: float) -> void:
 		_play_sfx(_sfx_brick_break)
 	if bool(r["paddle_hit"]):
 		_play_sfx(_sfx_paddle_hit)
+	if bool(r["ignited"]):
+		_flash_fire()
 	if bool(r["wall_hit"]):
 		_play_sfx(_sfx_wall_hit)
 	# P 는 목숨을 늘리므로 HUD 를 여기서 갱신한다 — 아래 lost/cleared 갱신은
@@ -80,7 +83,7 @@ func step_once(delta: float) -> void:
 			restarted = true
 	# 낙하 중인 공은 트레일을 안 남긴다 — 발사한 공의 궤적이 아니라서다.
 	if not field.attached and not field.dropping:
-		_trail.push(field.ball_pos, field.ball_vel.length())
+		_trail.push(field.ball_pos, field.ball_vel.length(), field.burning)
 	if bool(r["cleared"]) and not restarted:
 		_play_sfx(_sfx_stage_clear)
 		field.next_stage()
@@ -88,6 +91,17 @@ func step_once(delta: float) -> void:
 		board.build(field.grid)
 	if bool(r["lost"]) or bool(r["cleared"]):
 		_update_hud()
+
+# 정확히 받은 순간의 보상. 알파만 올렸다 내리는 CanvasLayer 사각형이라
+# 3D 쪽 비용이 없다. 점화는 몇 프레임 만에 지나가는 사건이라 공 색만으로는
+# 놓치기 쉬운데, 화면이 한 번 번쩍여야 손가락과 연결된다.
+#
+# Node.create_tween() 대신 SceneTree 의 것을 쓴다 — board_view 와 같은 이유로,
+# 트리 편입 전에 부르면 진행이 안 돼 테스트가 결과를 확인할 수 없다.
+func _flash_fire() -> void:
+	fire_flash.color = Color(Tuning.FIRE_COLOR, Tuning.FIRE_FLASH_ALPHA)
+	var tw := (Engine.get_main_loop() as SceneTree).create_tween()
+	tw.tween_property(fire_flash, "color:a", 0.0, Tuning.FIRE_FLASH_SEC)
 
 # 테스트 하네스는 root.add_child() 를 _initialize() 안에서 부르는데, 그
 # 시점엔 노드가 아직 트리에 편입되지 않는다 — AudioStreamPlayer.play() 는
