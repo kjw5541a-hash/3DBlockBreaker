@@ -20,6 +20,7 @@ func _run() -> void:
 	_test_warm_up_primes_the_trail_then_clears_it()
 	_test_ignition_flashes_the_screen()
 	_test_the_back_button_pauses_instead_of_quitting()
+	_test_losing_focus_pauses()
 	await _test_the_pause_button_freezes_and_resumes()
 	await _test_resuming_does_not_launch_the_ball()
 	await _test_screen_point_maps_to_board()
@@ -478,4 +479,26 @@ func _test_the_back_button_pauses_instead_of_quitting() -> void:
 		assert(g._state == dead_state,
 			"멈출 게 없는 상태에서 뒤로 가기가 상태를 바꿨다: %d" % g._state)
 		assert(not g.pause_screen.visible, "그 상태에서 일시정지 화면이 떴다")
+	g.free()
+
+# 전화가 오거나 홈으로 나가면 공은 계속 날아가고 돌아왔을 때는 이미 목숨이
+# 없다. 포커스를 잃으면 멈춘다. 돌아올 때 저절로 풀지는 않는다 — 화면을 다시
+# 보자마자 공이 움직이면 손이 못 따라간다.
+func _test_losing_focus_pauses() -> void:
+	var packed := load("res://scenes/game.tscn") as PackedScene
+	var g := packed.instantiate()
+	root.add_child(g)
+	g._ready()
+	g._state = g.State.PLAYING
+	g._notification(g.NOTIFICATION_APPLICATION_FOCUS_OUT)
+	assert(g._state == g.State.PAUSED, "백그라운드로 갔는데 안 멈췄다")
+	assert(g.pause_screen.visible, "백그라운드로 멈췄는데 화면이 안 떴다")
+	g._notification(g.NOTIFICATION_APPLICATION_FOCUS_IN)
+	assert(g._state == g.State.PAUSED, "돌아오자마자 저절로 재개됐다")
+	# 타이틀에서 앱을 내렸다 올리면 일시정지 화면이 타이틀을 덮는다.
+	g._state = g.State.TITLE
+	g.pause_screen.visible = false
+	g._notification(g.NOTIFICATION_APPLICATION_FOCUS_OUT)
+	assert(g._state == g.State.TITLE, "타이틀에서 포커스를 잃었는데 상태가 바뀌었다")
+	assert(not g.pause_screen.visible, "타이틀 위에 일시정지 화면이 떴다")
 	g.free()

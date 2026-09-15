@@ -144,13 +144,19 @@ func _start() -> void:
 	_trail.reset()
 
 # 안드로이드 뒤로 가기. quit_on_go_back 을 꺼 뒀으므로 여기서 안 받으면 아무
-# 일도 안 일어난다. 멈출 것이 있을 때만 쓴다 — 타이틀과 게임오버 위에 일시정지
-# 화면이 겹쳐 뜨면 어느 터치가 먹는지 알 수 없어진다.
+# 일도 안 일어난다.
 func _notification(what: int) -> void:
-	if what != NOTIFICATION_WM_GO_BACK_REQUEST:
-		return
-	if _state == State.PLAYING or _state == State.PAUSED:
-		_toggle_pause()
+	# 뒤로 가기는 토글이고 포커스 상실은 한 방향이다 — 전화를 받고 돌아왔는데
+	# 공이 이미 날아가고 있으면 손이 못 따라간다. 돌아올 때 저절로 풀지 않는
+	# 이유도 같다. 둘 다 멈출 것이 있을 때만 쓴다 — 타이틀이나 게임오버 위에
+	# 일시정지 화면이 겹쳐 뜨면 어느 터치가 먹는지 알 수 없어진다.
+	match what:
+		NOTIFICATION_WM_GO_BACK_REQUEST:
+			if _state == State.PLAYING or _state == State.PAUSED:
+				_toggle_pause()
+		NOTIFICATION_APPLICATION_FOCUS_OUT:
+			if _state == State.PLAYING:
+				_toggle_pause()
 
 func _toggle_pause() -> void:
 	_state = State.PLAYING if _state == State.PAUSED else State.PAUSED
