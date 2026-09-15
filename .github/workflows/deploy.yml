@@ -149,6 +149,11 @@ jobs:
           grep -q 'createElement("iframe")' build/web/index.html
           test "$(cat build/web/version.txt)" = "$BASENAME"
 
+      # Play Console 은 개인정보처리방침에 공개 URL 을 요구한다. 게임 자체와는
+      # 무관하지만 같은 Pages 사이트에 얹어 두면 별도 호스팅이 필요 없다.
+      - name: Copy privacy policy
+        run: cp store/privacy.html build/web/privacy.html
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: build/web

@@ -3,7 +3,7 @@ config_version=5
 
 [application]
 
-config/name="3DBlockBreaker"
+config/name="3D 블럭파괴"
 ; 배포 워크플로가 빌드마다 날짜와 커밋 해시로 덮어쓴다. HUD 에 그대로
 ; 표시되므로 폰에서 지금 어떤 빌드를 보고 있는지 바로 알 수 있다.
 config/version="dev"
@@ -49,6 +49,10 @@ renderer/rendering_method="forward_plus"
 ; mobile 은 Vulkan 을 요구해 구형 기기가 떨어져 나가고, 그렇게 늘어난 화질은
 ; 이 게임이 쓰지도 않는다(금속 재질은 이미 코드 재질로 덮어 놨다).
 renderer/rendering_method.mobile="gl_compatibility"
+
+; 안드로이드 export 가 요구한다 — VRAM 텍스처 압축 없이는 preset 검증에서
+; 막힌다. 모바일 GPU 용 포맷(ETC2/ASTC)을 텍스처 임포트 시 같이 굽는다.
+textures/vram_compression/import_etc2_astc=true
 
 [input_devices]
 
