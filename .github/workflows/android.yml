@@ -1,0 +1,97 @@
+name: Build Android
+
+# 로컬에는 안드로이드 export template 도 SDK 도 없다(Java 도 26 이라 Godot 이
+# 요구하는 17 이 아니다) — 그래서 이 워크플로가 실제 검증 수단이다.
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GODOT_VERSION: 4.7.2
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Godot 의 그레이들 빌드가 JDK 17 을 요구한다. ubuntu-latest 기본 JDK 는
+      # 더 최신이라 명시해야 한다.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # ubuntu-latest 러너에는 안드로이드 SDK 가 이미 라이선스 수락까지 끝난
+      # 채로 깔려 있다 — platform-tools, 최신 platform, build-tools 전부.
+
+      - name: Cache export templates
+        id: templates
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/godot/export_templates
+          key: godot-android-templates-${{ env.GODOT_VERSION }}
+
+      - name: Install Godot
+        run: |
+          set -euo pipefail
+          base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          curl -fsSL -o godot.zip "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip
+          install -m 755 "Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot
+
+      - name: Install export templates
+        if: steps.templates.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          curl -fsSL -o templates.tpz "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          dest="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$dest"
+          unzip -q -o -j templates.tpz 'templates/android_*' 'templates/version.txt' -d "$dest"
+
+      - name: Run tests
+        run: ./run_tests.sh
+        env:
+          GODOT: /usr/local/bin/godot
+
+      # 키스토어는 비밀값으로만 존재한다. 파일로 풀고 export_presets.cfg 에
+      # 그 경로와 비밀번호를 써 넣는 것은 이 스텝이 끝나면 사라지는 러너
+      # 안에서만 벌어진다 — 커밋되지 않는다.
+      - name: Write keystore
+        run: |
+          set -euo pipefail
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > /tmp/upload-keystore.jks
+          python3 - <<'PY'
+          import re
+          p = 'export_presets.cfg'
+          s = open(p, encoding='utf-8').read()
+          import os
+          s = s.replace('keystore/release=""', 'keystore/release="/tmp/upload-keystore.jks"')
+          s = s.replace('keystore/release_user=""',
+              'keystore/release_user="%s"' % os.environ['ANDROID_KEY_ALIAS'])
+          s = s.replace('keystore/release_password=""',
+              'keystore/release_password="%s"' % os.environ['ANDROID_KEYSTORE_PASSWORD'])
+          open(p, 'w', encoding='utf-8').write(s)
+          PY
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+
+      - name: Export Android AAB
+        run: |
+          set -euo pipefail
+          mkdir -p build/android
+          godot --headless --export-release "Android" build/android/blockbreaker.aab
+          test -s build/android/blockbreaker.aab
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: blockbreaker-aab
+          path: build/android/blockbreaker.aab
+          retention-days: 30
