@@ -50,6 +50,10 @@ renderer/rendering_method="forward_plus"
 ; 이 게임이 쓰지도 않는다(금속 재질은 이미 코드 재질로 덮어 놨다).
 renderer/rendering_method.mobile="gl_compatibility"
 
+; 안드로이드 export 가 요구한다 — VRAM 텍스처 압축 없이는 preset 검증에서
+; 막힌다. 모바일 GPU 용 포맷(ETC2/ASTC)을 텍스처 임포트 시 같이 굽는다.
+textures/vram_compression/import_etc2_astc=true
+
 [input_devices]
 
 ; 데스크톱에는 InputEventScreenDrag 가 없다. 이게 없으면 조작 코드
