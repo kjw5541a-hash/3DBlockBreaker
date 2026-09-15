@@ -7,6 +7,10 @@ extends Node3D
 @onready var stage_label: Label = $HUD/Stage
 @onready var title_screen: Control = $HUD/TitleScreen
 @onready var fire_flash: ColorRect = $HUD/FireFlash
+@onready var pause_button: Label = $HUD/PauseButton
+@onready var pause_screen: ColorRect = $HUD/PauseScreen
+@onready var game_over_screen: ColorRect = $HUD/GameOverScreen
+@onready var game_over_stage: Label = $HUD/GameOverScreen/Stage
 @onready var _sfx_paddle_hit: AudioStreamPlayer = $Sfx/PaddleHit
 @onready var _sfx_wall_hit: AudioStreamPlayer = $Sfx/WallHit
 @onready var _sfx_brick_break: AudioStreamPlayer = $Sfx/BrickBreak
@@ -18,8 +22,10 @@ var field: PlayField
 # 손가락이 닿기 전에는 패들을 제자리에 둔다.
 var _target: Vector2
 var _trail: BallTrail
-# 타이틀 화면을 넘기기 전에는 물리를 안 돌린다.
-var _started: bool = false
+# 타이틀 -> 진행 -> (일시정지) <-> 진행 -> 게임오버 -> 진행. 물리가 도는 상태는
+# PLAYING 하나뿐이라 "지금 돌려도 되나"를 한 군데서만 묻는다.
+enum State { TITLE, PLAYING, PAUSED, OVER }
+var _state: State = State.TITLE
 
 func _ready() -> void:
 	field = PlayField.new()
@@ -39,7 +45,7 @@ func _ready() -> void:
 	_trail.push(field.ball_pos + Vector2(0.0, 0.02), 0.0)
 
 func _physics_process(delta: float) -> void:
-	if not _started:
+	if _state != State.PLAYING:
 		return
 	step_once(delta)
 
@@ -65,26 +71,23 @@ func step_once(delta: float) -> void:
 	board.sync(field)
 	# step() 은 구조적으로 lost 와 cleared 를 한 dict 에 함께 담을 수 있다 — 서브스텝
 	# 루프가 out["lost"] 를 세우고 빠져나와도 remaining() 검사는 그대로 돌기 때문이다.
-	# 그러면 reset_run() 이 0 판으로 되돌린 직후 next_stage() 가 1 판으로 올려 버린다.
+	# 그러면 게임오버로 멈춰 세운 판을 같은 프레임의 next_stage() 가 넘겨 버려,
+	# 화면은 게임오버인데 뒤에서는 다음 판이 깔린다.
 	#
 	# 지금 물리로는 그 조합이 안 나온다 — 공이 한 프레임에 블럭 띠에서 데드존까지 갈
 	# 만큼 빠르지 않다. 그래도 가드를 두는 것은 아이템 D(공 분열)가
 	# "목숨은 마지막 공이 사라질 때 깎인다"로 바꾸는 순간 열리기 때문이다 — 그때 이 버그는
-	# 생성기 결함으로 오진되기 딱 좋다. 되돌린 프레임의 클리어는 이미 사라진 판의 것이다.
-	var restarted := false
+	# 생성기 결함으로 오진되기 딱 좋다. 끝난 판의 클리어는 이미 사라진 판의 것이다.
 	if bool(r["lost"]):
 		_trail.reset()
 		board.play_paddle_break()
 		_play_sfx(_sfx_life_lost)
-		# 마지막 목숨을 잃으면 처음부터 다시 — 아직 게임오버 화면이 없다.
 		if field.lives <= 0:
-			field.reset_run()
-			board.build(field.grid)
-			restarted = true
+			_game_over()
 	# 낙하 중인 공은 트레일을 안 남긴다 — 발사한 공의 궤적이 아니라서다.
 	if not field.attached and not field.dropping:
 		_trail.push(field.ball_pos, field.ball_vel.length(), field.burning)
-	if bool(r["cleared"]) and not restarted:
+	if bool(r["cleared"]) and _state != State.OVER:
 		_play_sfx(_sfx_stage_clear)
 		field.next_stage()
 		_trail.reset()
@@ -112,15 +115,57 @@ func _play_sfx(player: AudioStreamPlayer) -> void:
 		player.play()
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not _started:
-		if event is InputEventScreenTouch and (event as InputEventScreenTouch).pressed:
-			_started = true
-			title_screen.visible = false
-			# 워밍업 잔재를 치운다. 트레일 점을 남기면 첫 발사 궤적이
-			# 공이 있지도 않았던 자리와 한 줄로 이어진다.
-			board.end_warm_up()
-			_trail.reset()
+	var touch := event as InputEventScreenTouch
+	# 일시정지 버튼은 Button 이 아니라 라벨이고, 판정은 여기서 사각형으로 한다.
+	# 터치 하나가 GUI 와 게임 조작 두 갈래로 나뉘면 어느 쪽이 먼저 먹었는지에
+	# 따라 패들이 튄다. 누를 때만 토글하고 뒤따라 오는 뗌은 버린다 — 안 그러면
+	# 재개시킨 그 손가락의 뗌이 스프링 발사로 읽혀 공이 제멋대로 나간다.
+	if touch != null and (_state == State.PLAYING or _state == State.PAUSED) \
+			and pause_button.get_global_rect().has_point(touch.position):
+		if touch.pressed:
+			_toggle_pause()
 		return
+	match _state:
+		State.TITLE:
+			if touch != null and touch.pressed:
+				_start()
+		State.OVER:
+			if touch != null and touch.pressed:
+				_restart()
+		State.PLAYING:
+			_play_input(event)
+
+func _start() -> void:
+	_state = State.PLAYING
+	title_screen.visible = false
+	# 워밍업 잔재를 치운다. 트레일 점을 남기면 첫 발사 궤적이
+	# 공이 있지도 않았던 자리와 한 줄로 이어진다.
+	board.end_warm_up()
+	_trail.reset()
+
+func _toggle_pause() -> void:
+	_state = State.PLAYING if _state == State.PAUSED else State.PAUSED
+	pause_screen.visible = _state == State.PAUSED
+
+# 마지막 목숨을 잃었다. 말없이 처음부터 다시 돌리면 플레이어는 자기가 진
+# 것인지 화면이 튄 것인지 구별할 수 없다. 멈춰 세우고 어디까지 갔는지 보여준다.
+func _game_over() -> void:
+	_state = State.OVER
+	game_over_stage.text = "판 %d 까지" % (field.stage_index + 1)
+	game_over_screen.visible = true
+
+func _restart() -> void:
+	game_over_screen.visible = false
+	field.reset_run()
+	board.build(field.grid)
+	_trail.reset()
+	# 마지막에 손가락이 있던 자리를 그대로 두면 새 공이 시작하자마자 패들이
+	# 그리로 미끄러진다.
+	_target = field.paddle.pos
+	_update_hud()
+	_state = State.PLAYING
+
+func _play_input(event: InputEvent) -> void:
 	if event is InputEventScreenDrag:
 		_target = screen_to_board((event as InputEventScreenDrag).position)
 	elif event is InputEventScreenTouch:

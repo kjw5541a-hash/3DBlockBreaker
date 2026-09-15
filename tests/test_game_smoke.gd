@@ -10,7 +10,8 @@ func _initialize() -> void:
 func _run() -> void:
 	_test_scene_loads_and_runs()
 	_test_life_loss_clears_trail()
-	_test_last_life_restarts()
+	_test_last_life_shows_game_over()
+	_test_touching_the_game_over_screen_restarts()
 	_test_clear_and_run_over_in_one_frame_keeps_stage_zero()
 	_test_clearing_a_stage_advances_the_board_and_hud()
 	_test_stage_label_follows_the_stage_index()
@@ -18,6 +19,8 @@ func _run() -> void:
 	_test_physics_gated_until_started()
 	_test_warm_up_primes_the_trail_then_clears_it()
 	_test_ignition_flashes_the_screen()
+	await _test_the_pause_button_freezes_and_resumes()
+	await _test_resuming_does_not_launch_the_ball()
 	await _test_screen_point_maps_to_board()
 	await _test_board_fits_in_camera()
 	print("test_game_smoke: OK")
@@ -74,38 +77,73 @@ func _test_life_loss_clears_trail() -> void:
 		"목숨을 잃은 뒤에도 트레일 점이 남아 있다: %d" % g._trail.point_count())
 	g.free()
 
-# 마지막 목숨을 잃으면 목숨과 블럭이 모두 초기 상태로 돌아가야 한다.
-# 1단계에는 게임오버 화면이 없으므로 이게 유일한 종료 처리다.
-func _test_last_life_restarts() -> void:
+# 마지막 목숨을 잃으면 게임오버 화면이 뜨고 거기서 멈춘다. 예전에는 말없이
+# 처음부터 다시 시작해서, 플레이어는 자기가 진 것인지 화면이 튄 것인지
+# 구별할 수 없었다.
+func _test_last_life_shows_game_over() -> void:
 	var packed := load("res://scenes/game.tscn") as PackedScene
 	var g := packed.instantiate()
 	root.add_child(g)
 	g._ready()
+	g._state = g.State.PLAYING
+	assert(not g.game_over_screen.visible, "시작부터 게임오버 화면이 떠 있다")
+	g.field.stage_index = 2
 	g.field.lives = 1
-	g.field.grid.hit(0, 0)
 	g.field.attached = false
 	g.field.ball_pos = Vector2(4.0, 2.5)
 	g.field.ball_vel = Vector2(0.0, -5.0)
-	var lost := false
 	for i in 240:
 		g.step_once(1.0 / 120.0)
-		if g.field.attached:
-			lost = true
+		if g.field.lives <= 0:
 			break
-	assert(lost, "공이 데드존까지 안 내려갔다")
+	assert(g.field.lives == 0, "공이 데드존까지 안 내려갔다: 목숨 %d" % g.field.lives)
+	assert(g._state == g.State.OVER, "목숨이 다 됐는데 게임오버 상태가 아니다")
+	assert(g.game_over_screen.visible, "게임오버인데 화면이 안 떴다")
+	# 어디까지 갔는지가 이 화면의 유일한 성적표다. HUD 와 같은 1 기반 번호를 쓴다.
+	assert(g.game_over_stage.text == "판 3 까지",
+		"게임오버 화면의 판 번호가 틀렸다: %s" % g.game_over_stage.text)
+	# 게임오버인데 물리가 계속 돌면 뒤에서 공이 혼자 튀어 다닌다.
+	var before: Vector2 = g.field.ball_pos
+	g._physics_process(1.0 / 120.0)
+	assert(g.field.ball_pos == before, "게임오버인데 공이 움직였다")
+	g.free()
+
+# 게임오버 화면은 터치를 기다렸다가 처음부터 다시 시작한다.
+func _test_touching_the_game_over_screen_restarts() -> void:
+	var packed := load("res://scenes/game.tscn") as PackedScene
+	var g := packed.instantiate()
+	root.add_child(g)
+	g._ready()
+	g._state = g.State.PLAYING
+	g.field.stage_index = 2
+	g.field.grid.hit(0, 0)
+	g.field.lives = 1
+	g.field.attached = false
+	g.field.ball_pos = Vector2(4.0, 2.5)
+	g.field.ball_vel = Vector2(0.0, -5.0)
+	for i in 240:
+		g.step_once(1.0 / 120.0)
+		if g._state == g.State.OVER:
+			break
+	assert(g._state == g.State.OVER, "게임오버까지 안 갔다")
+	var touch := InputEventScreenTouch.new()
+	touch.pressed = true
+	g._unhandled_input(touch)
+	assert(g._state == g.State.PLAYING, "터치했는데 다시 시작 안 했다")
+	assert(not g.game_over_screen.visible, "다시 시작했는데 게임오버 화면이 남았다")
 	assert(g.field.lives == Tuning.LIVES,
-		"마지막 목숨을 잃었는데 목숨이 안 돌아왔다: %d" % g.field.lives)
-	assert(g.field.grid.cells == StageGen.stage(0).cells,
-		"재시작인데 0 판 배치가 아니다: 남은 블럭 %d" % g.field.grid.remaining())
+		"다시 시작했는데 목숨이 안 돌아왔다: %d" % g.field.lives)
 	assert(g.field.stage_index == 0,
-		"재시작인데 판 번호가 안 돌아갔다: %d" % g.field.stage_index)
+		"다시 시작했는데 판 번호가 안 돌아갔다: %d" % g.field.stage_index)
+	assert(g.field.grid.cells == StageGen.stage(0).cells,
+		"다시 시작인데 0 판 배치가 아니다: 남은 블럭 %d" % g.field.grid.remaining())
 	assert(g.lives_label.text == "목숨 %d" % Tuning.LIVES,
 		"HUD 가 0 목숨을 그대로 보여준다: %s" % g.lives_label.text)
 	g.free()
 
 # step() 은 한 프레임에 lost 와 cleared 를 함께 낼 수 있다 — 서브스텝 루프가 lost 로
-# 빠져나와도 remaining() 검사는 그대로 돌기 때문이다. 그때 전멸 복구가 되돌린 판을
-# 같은 프레임의 클리어가 덮어쓰면, 플레이어는 0 판이 아니라 1 판에서 다시 시작한다.
+# 빠져나와도 remaining() 검사는 그대로 돌기 때문이다. 그때 게임오버로 멈춘 판을
+# 같은 프레임의 클리어가 넘겨 버리면, 화면은 게임오버인데 뒤에서 다음 판이 깔린다.
 func _test_clear_and_run_over_in_one_frame_keeps_stage_zero() -> void:
 	var packed := load("res://scenes/game.tscn") as PackedScene
 	var g := packed.instantiate()
@@ -136,10 +174,17 @@ func _test_clear_and_run_over_in_one_frame_keeps_stage_zero() -> void:
 	g.field.ball_pos = Vector2(0.0, -0.5)
 	g.field.ball_vel = Vector2(0.0, -1.0)
 	g.step_once(1.0 / 120.0)
+	assert(g._state == g.State.OVER, "목숨이 다 됐는데 게임오버가 아니다")
+	assert(g.field.stage_index == 4,
+		"게임오버로 멈춘 판을 같은 프레임의 클리어가 넘겨 버렸다: %d" % g.field.stage_index)
+	# 다시 시작하면 그때 0 판으로 돌아간다.
+	var touch := InputEventScreenTouch.new()
+	touch.pressed = true
+	g._unhandled_input(touch)
 	assert(g.field.stage_index == 0,
-		"전멸로 되돌린 판을 같은 프레임의 클리어가 덮어썼다: %d" % g.field.stage_index)
+		"다시 시작했는데 0 판이 아니다: %d" % g.field.stage_index)
 	assert(g.field.lives == Tuning.LIVES,
-		"전멸 복구가 안 됐다: %d" % g.field.lives)
+		"다시 시작했는데 목숨이 안 돌아왔다: %d" % g.field.lives)
 	assert(g.field.grid.cells == StageGen.stage(0).cells,
 		"되돌린 뒤 배치가 0 판이 아니다")
 	g.free()
@@ -173,12 +218,12 @@ func _test_title_screen_blocks_play_until_touched() -> void:
 	var g := packed.instantiate()
 	root.add_child(g)
 	g._ready()
-	assert(not g._started, "시작 전인데 이미 시작 상태다")
+	assert(g._state == g.State.TITLE, "시작 전인데 이미 시작 상태다")
 	assert(g.title_screen.visible, "시작 전인데 타이틀 화면이 안 보인다")
 	var touch := InputEventScreenTouch.new()
 	touch.pressed = true
 	g._unhandled_input(touch)
-	assert(g._started, "터치했는데 시작 상태로 안 바뀌었다")
+	assert(g._state == g.State.PLAYING, "터치했는데 시작 상태로 안 바뀌었다")
 	assert(not g.title_screen.visible, "시작했는데 타이틀 화면이 안 사라졌다")
 	g.free()
 
@@ -195,7 +240,7 @@ func _test_physics_gated_until_started() -> void:
 	var before: Vector2 = g.field.ball_pos
 	g._physics_process(1.0 / 120.0)
 	assert(g.field.ball_pos == before, "타이틀 화면인데 공이 움직였다")
-	g._started = true
+	g._state = g.State.PLAYING
 	g._physics_process(1.0 / 120.0)
 	assert(g.field.ball_pos != before, "시작했는데 물리가 안 돈다")
 	g.free()
@@ -332,4 +377,78 @@ func _test_ignition_flashes_the_screen() -> void:
 			break
 	assert(flashed, "정중앙으로 받았는데 화면이 안 번쩍였다")
 	assert(g.field.burning, "번쩍였는데 공에 불이 안 붙었다")
+	g.free()
+
+# 일시정지 버튼은 Button 이 아니라 그냥 라벨이고, 판정은 _unhandled_input 안에서
+# 사각형으로 한다. 터치 하나가 GUI 와 게임 조작 두 곳으로 갈라지지 않게 하려는
+# 것이다 — 갈라지면 어느 쪽이 먼저 먹었는지에 따라 패들이 튄다.
+#
+# get_global_rect() 는 레이아웃이 한 번 돌아야 값이 선다. process_frame 을
+# 기다리는 이유다.
+func _test_the_pause_button_freezes_and_resumes() -> void:
+	var packed := load("res://scenes/game.tscn") as PackedScene
+	var g := packed.instantiate()
+	root.add_child(g)
+	await process_frame
+	g._state = g.State.PLAYING
+	g.field.attached = false
+	g.field.ball_pos = Vector2(0.0, 5.0)
+	g.field.ball_vel = Vector2(0.0, 3.0)
+	assert(not g.pause_screen.visible, "시작부터 일시정지 화면이 떠 있다")
+	var rect: Rect2 = g.pause_button.get_global_rect()
+	assert(rect.size.x > 0.0 and rect.size.y > 0.0,
+		"일시정지 버튼에 크기가 없다 — 손가락이 닿을 자리가 없다: %s" % rect)
+	var tap := InputEventScreenTouch.new()
+	tap.pressed = true
+	tap.position = rect.get_center()
+	g._unhandled_input(tap)
+	assert(g._state == g.State.PAUSED, "일시정지 버튼을 눌렀는데 안 멈췄다")
+	assert(g.pause_screen.visible, "멈췄는데 일시정지 화면이 안 떴다")
+	var before: Vector2 = g.field.ball_pos
+	g._physics_process(1.0 / 120.0)
+	assert(g.field.ball_pos == before, "일시정지인데 공이 움직였다")
+	# 멈춘 동안의 드래그가 패들 타깃을 옮기면, 재개하는 순간 패들이 순간이동한다.
+	var target_before: Vector2 = g._target
+	var drag := InputEventScreenDrag.new()
+	drag.position = Vector2(10.0, 10.0)
+	g._unhandled_input(drag)
+	assert(g._target == target_before,
+		"일시정지인데 드래그가 패들 타깃을 옮겼다: %s" % g._target)
+	g._unhandled_input(tap)
+	assert(g._state == g.State.PLAYING, "다시 눌렀는데 재개가 안 됐다")
+	assert(not g.pause_screen.visible, "재개했는데 일시정지 화면이 남았다")
+	g._physics_process(1.0 / 120.0)
+	assert(g.field.ball_pos != before, "재개했는데 물리가 안 돈다")
+	g.free()
+
+# 재개시킨 그 손가락의 뗌이 게임 조작으로 새면 스프링 발사가 걸려 공이
+# 제멋대로 나간다. 버튼 자리의 터치는 누름도 뗌도 전부 여기서 끝나야 한다.
+func _test_resuming_does_not_launch_the_ball() -> void:
+	var packed := load("res://scenes/game.tscn") as PackedScene
+	var g := packed.instantiate()
+	root.add_child(g)
+	await process_frame
+	g._state = g.State.PLAYING
+	var center: Vector2 = g.pause_button.get_global_rect().get_center()
+	var target_before: Vector2 = g._target
+	var press := InputEventScreenTouch.new()
+	press.pressed = true
+	press.position = center
+	g._unhandled_input(press)
+	g._unhandled_input(press)
+	assert(g._state == g.State.PLAYING, "두 번 눌러 재개한 상태가 아니다")
+	assert(g.field.attached and not g.field.riding,
+		"이 테스트의 전제가 깨졌다 — 공이 이미 떠났다")
+	var release := InputEventScreenTouch.new()
+	release.pressed = false
+	release.position = center
+	g._unhandled_input(release)
+	# riding 을 본다 — release_ball() 은 attached 를 끄지 않고 공을 패들에 얹은
+	# 채로 놓기 때문에, attached 만 보면 발사된 것을 못 잡는다.
+	assert(not g.field.riding, "버튼에서 손을 뗐는데 공이 발사됐다")
+	# 뗌으로도 토글되면 누를 때마다 정지/재개가 두 번씩 뒤집혀 버튼이 안 먹는 것처럼 보인다.
+	assert(g._state == g.State.PLAYING, "버튼에서 손을 뗐는데 다시 멈췄다")
+	# 버튼 자리는 판 꼭대기 구석이다. 여기가 패들 타깃이 되면 패들이 판 밖으로 뛴다.
+	assert(g._target == target_before,
+		"일시정지 버튼을 누른 자리가 패들 타깃이 됐다: %s" % g._target)
 	g.free()
