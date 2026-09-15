@@ -16,6 +16,14 @@ window/size/viewport_width=720
 window/size/viewport_height=1280
 window/handheld/orientation=1
 
+[gui]
+
+; Godot 기본 폰트에는 한글 글리프가 없다 — 깔지 않으면 HUD 와 일시정지·게임오버
+; 화면의 한글이 전부 두부(□)로 나오고 영문만 멀쩡해 보인다. 화면에 실제로
+; 나오는 글자만 남긴 subset 이라 20KB 다(전체는 10MB). UI 에 한글을 새로 쓰면
+; tools/make_font.sh 를 다시 돌릴 것 — tests/test_font.gd 가 빠진 글자를 잡는다.
+theme/custom_font="res://assets/NotoSansKR-subset.ttf"
+
 [physics]
 
 ; 공이 빠를 때 한 스텝 이동거리를 줄여 터널링 여지를 좁힌다. 서브스텝은
