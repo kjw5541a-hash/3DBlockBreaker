@@ -19,6 +19,7 @@ func _run() -> void:
 	_test_physics_gated_until_started()
 	_test_warm_up_primes_the_trail_then_clears_it()
 	_test_ignition_flashes_the_screen()
+	_test_the_back_button_pauses_instead_of_quitting()
 	await _test_the_pause_button_freezes_and_resumes()
 	await _test_resuming_does_not_launch_the_ball()
 	await _test_screen_point_maps_to_board()
@@ -451,4 +452,30 @@ func _test_resuming_does_not_launch_the_ball() -> void:
 	# 버튼 자리는 판 꼭대기 구석이다. 여기가 패들 타깃이 되면 패들이 판 밖으로 뛴다.
 	assert(g._target == target_before,
 		"일시정지 버튼을 누른 자리가 패들 타깃이 됐다: %s" % g._target)
+	g.free()
+
+# 안드로이드 뒤로 가기. Godot 은 기본값(quit_on_go_back)대로면 그 자리에서 앱을
+# 끝낸다 — 한 판 하다가 뒤로 가기를 스치면 게임이 통째로 날아간다. 껐으니
+# 여기서 받아 일시정지로 쓴다.
+func _test_the_back_button_pauses_instead_of_quitting() -> void:
+	assert(not bool(ProjectSettings.get_setting("application/config/quit_on_go_back", true)),
+		"quit_on_go_back 이 켜져 있다 — 뒤로 가기가 앱을 끝낸다")
+	var packed := load("res://scenes/game.tscn") as PackedScene
+	var g := packed.instantiate()
+	root.add_child(g)
+	g._ready()
+	g._state = g.State.PLAYING
+	g._notification(g.NOTIFICATION_WM_GO_BACK_REQUEST)
+	assert(g._state == g.State.PAUSED, "뒤로 가기를 눌렀는데 안 멈췄다")
+	assert(g.pause_screen.visible, "뒤로 가기로 멈췄는데 화면이 안 떴다")
+	g._notification(g.NOTIFICATION_WM_GO_BACK_REQUEST)
+	assert(g._state == g.State.PLAYING, "뒤로 가기를 다시 눌렀는데 재개가 안 됐다")
+	# 타이틀과 게임오버에서는 멈출 것이 없다. 거기서 일시정지 화면이 뜨면
+	# 겹쳐 뜬 두 화면 중 어느 터치가 먹는지 알 수 없어진다.
+	for dead_state in [g.State.TITLE, g.State.OVER]:
+		g._state = dead_state
+		g._notification(g.NOTIFICATION_WM_GO_BACK_REQUEST)
+		assert(g._state == dead_state,
+			"멈출 게 없는 상태에서 뒤로 가기가 상태를 바꿨다: %d" % g._state)
+		assert(not g.pause_screen.visible, "그 상태에서 일시정지 화면이 떴다")
 	g.free()
