@@ -72,9 +72,11 @@ color = Color(0.05, 0.05, 0.08, 0.88)
 anchor_left = 0.5
 anchor_right = 0.5
 offset_left = -300.0
-offset_top = 520.0
+anchor_top = 0.5
+anchor_bottom = 0.5
+offset_top = -120.0
 offset_right = 300.0
-offset_bottom = 580.0
+offset_bottom = -60.0
 theme_override_font_sizes/font_size = 56
 horizontal_alignment = 1
 text = "3D Block Breaker"
@@ -83,18 +85,22 @@ text = "3D Block Breaker"
 anchor_left = 0.5
 anchor_right = 0.5
 offset_left = -200.0
-offset_top = 620.0
+anchor_top = 0.5
+anchor_bottom = 0.5
+offset_top = -20.0
 offset_right = 200.0
-offset_bottom = 660.0
+offset_bottom = 20.0
 theme_override_font_sizes/font_size = 28
 horizontal_alignment = 1
 text = "Touch to Start"
 
 [node name="Version" type="Label" parent="HUD"]
+anchor_top = 1.0
+anchor_bottom = 1.0
 offset_left = 24.0
-offset_top = 1228.0
+offset_top = -52.0
 offset_right = 620.0
-offset_bottom = 1268.0
+offset_bottom = -12.0
 theme_override_font_sizes/font_size = 24
 text = "dev"
 
@@ -103,3 +109,94 @@ mouse_filter = 2
 anchor_right = 1.0
 anchor_bottom = 1.0
 color = Color(1, 0.55, 0.15, 0)
+
+[node name="PauseButton" type="Label" parent="HUD"]
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -228.0
+offset_top = 8.0
+offset_right = -16.0
+offset_bottom = 92.0
+theme_override_font_sizes/font_size = 32
+horizontal_alignment = 2
+vertical_alignment = 1
+text = "일시정지"
+
+[node name="PauseScreen" type="ColorRect" parent="HUD"]
+visible = false
+mouse_filter = 2
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.05, 0.05, 0.08, 0.88)
+
+[node name="Title" type="Label" parent="HUD/PauseScreen"]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -300.0
+anchor_top = 0.5
+anchor_bottom = 0.5
+offset_top = -80.0
+offset_right = 300.0
+offset_bottom = -20.0
+theme_override_font_sizes/font_size = 56
+horizontal_alignment = 1
+text = "일시정지"
+
+[node name="Prompt" type="Label" parent="HUD/PauseScreen"]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -260.0
+anchor_top = 0.5
+anchor_bottom = 0.5
+offset_top = 20.0
+offset_right = 260.0
+offset_bottom = 60.0
+theme_override_font_sizes/font_size = 28
+horizontal_alignment = 1
+text = "다시 누르면 계속"
+
+[node name="GameOverScreen" type="ColorRect" parent="HUD"]
+visible = false
+mouse_filter = 2
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.08, 0.03, 0.04, 0.92)
+
+[node name="Title" type="Label" parent="HUD/GameOverScreen"]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -300.0
+anchor_top = 0.5
+anchor_bottom = 0.5
+offset_top = -120.0
+offset_right = 300.0
+offset_bottom = -60.0
+theme_override_font_sizes/font_size = 56
+horizontal_alignment = 1
+text = "GAME OVER"
+
+[node name="Stage" type="Label" parent="HUD/GameOverScreen"]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -300.0
+anchor_top = 0.5
+anchor_bottom = 0.5
+offset_top = -40.0
+offset_right = 300.0
+offset_bottom = 4.0
+theme_override_font_sizes/font_size = 36
+horizontal_alignment = 1
+text = "판 - 까지"
+
+[node name="Prompt" type="Label" parent="HUD/GameOverScreen"]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -260.0
+anchor_top = 0.5
+anchor_bottom = 0.5
+offset_top = 60.0
+offset_right = 260.0
+offset_bottom = 100.0
+theme_override_font_sizes/font_size = 28
+horizontal_alignment = 1
+text = "터치하면 처음부터"

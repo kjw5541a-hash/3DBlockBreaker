@@ -8,6 +8,10 @@ config/name="3DBlockBreaker"
 ; 표시되므로 폰에서 지금 어떤 빌드를 보고 있는지 바로 알 수 있다.
 config/version="dev"
 run/main_scene="res://scenes/game.tscn"
+config/icon="res://assets/icon.png"
+; 안드로이드 뒤로 가기가 그 자리에서 앱을 끝내는 기본 동작을 끈다. 한 판 하다가
+; 스치기만 해도 게임이 통째로 날아간다. game.gd 가 받아서 일시정지로 쓴다.
+config/quit_on_go_back=false
 config/features=PackedStringArray("4.7", "Forward Plus")
 
 [display]
@@ -15,6 +19,21 @@ config/features=PackedStringArray("4.7", "Forward Plus")
 window/size/viewport_width=720
 window/size/viewport_height=1280
 window/handheld/orientation=1
+; 폰 화면비는 16:9 부터 20:9 를 넘어간다. 기준 해상도(720x1280)를 그대로 쓰면
+; 긴 화면에서 HUD 가 허공에 뜨고 아래쪽이 잘린다. canvas_items 로 2D 를 기준
+; 해상도 기준으로 스케일하고, expand 로 남는 쪽을 더 보여준다 — 3D 카메라는
+; keep_aspect=KEEP_WIDTH 라 가로 화각이 고정이므로 긴 화면에서는 위아래가 더
+; 보일 뿐 판이 잘리지 않는다. tests/test_layout.gd 가 앵커까지 같이 지킨다.
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
+[gui]
+
+; Godot 기본 폰트에는 한글 글리프가 없다 — 깔지 않으면 HUD 와 일시정지·게임오버
+; 화면의 한글이 전부 두부(□)로 나오고 영문만 멀쩡해 보인다. 화면에 실제로
+; 나오는 글자만 남긴 subset 이라 20KB 다(전체는 10MB). UI 에 한글을 새로 쓰면
+; tools/make_font.sh 를 다시 돌릴 것 — tests/test_font.gd 가 빠진 글자를 잡는다.
+theme/custom_font="res://assets/NotoSansKR-subset.ttf"
 
 [physics]
 
@@ -25,6 +44,11 @@ common/physics_ticks_per_second=120
 [rendering]
 
 renderer/rendering_method="forward_plus"
+; 안드로이드만 GL Compatibility 로 내린다. 웹 빌드가 이미 이 렌더러로 떨어지므로
+; 지금까지 폰 브라우저에서 확인해 온 화면과 같은 것이 나온다. forward_plus /
+; mobile 은 Vulkan 을 요구해 구형 기기가 떨어져 나가고, 그렇게 늘어난 화질은
+; 이 게임이 쓰지도 않는다(금속 재질은 이미 코드 재질로 덮어 놨다).
+renderer/rendering_method.mobile="gl_compatibility"
 
 [input_devices]
 
