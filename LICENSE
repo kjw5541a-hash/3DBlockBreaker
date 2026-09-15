@@ -19,3 +19,14 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+The above MIT License applies only to the source code (`scripts/`, `scenes/`,
+`tests/`, `tools/`, project and workflow configuration files).
+
+It does not apply to the game's art, audio, and store assets — the contents
+of `assets/` (except `NotoSansKR-subset.ttf`, licensed separately under the
+SIL Open Font License, see `assets/NotoSansKR-OFL.txt`), `sfx/`, and the
+images in `store/`. Those are Copyright (c) 2026 kjw5541a. All rights
+reserved.
