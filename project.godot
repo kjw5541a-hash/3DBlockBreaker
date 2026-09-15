@@ -3,7 +3,7 @@ config_version=5
 
 [application]
 
-config/name="3DBlockBreaker"
+config/name="3D 블럭파괴"
 ; 배포 워크플로가 빌드마다 날짜와 커밋 해시로 덮어쓴다. HUD 에 그대로
 ; 표시되므로 폰에서 지금 어떤 빌드를 보고 있는지 바로 알 수 있다.
 config/version="dev"
