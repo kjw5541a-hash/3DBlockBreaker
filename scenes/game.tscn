@@ -94,6 +94,19 @@ theme_override_font_sizes/font_size = 28
 horizontal_alignment = 1
 text = "Touch to Start"
 
+[node name="BestStage" type="Label" parent="HUD/TitleScreen"]
+visible = false
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -200.0
+anchor_top = 0.5
+anchor_bottom = 0.5
+offset_top = 40.0
+offset_right = 200.0
+offset_bottom = 74.0
+theme_override_font_sizes/font_size = 24
+horizontal_alignment = 1
+
 [node name="Version" type="Label" parent="HUD"]
 anchor_top = 1.0
 anchor_bottom = 1.0
@@ -187,6 +200,18 @@ offset_bottom = 4.0
 theme_override_font_sizes/font_size = 36
 horizontal_alignment = 1
 text = "판 - 까지"
+
+[node name="BestStage" type="Label" parent="HUD/GameOverScreen"]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -300.0
+anchor_top = 0.5
+anchor_bottom = 0.5
+offset_top = 12.0
+offset_right = 300.0
+offset_bottom = 46.0
+theme_override_font_sizes/font_size = 24
+horizontal_alignment = 1
 
 [node name="Prompt" type="Label" parent="HUD/GameOverScreen"]
 anchor_left = 0.5

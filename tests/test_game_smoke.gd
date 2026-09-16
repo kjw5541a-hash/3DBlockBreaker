@@ -21,6 +21,8 @@ func _run() -> void:
 	_test_ignition_flashes_the_screen()
 	_test_the_back_button_pauses_instead_of_quitting()
 	_test_losing_focus_pauses()
+	_test_beating_the_best_stage_saves_a_new_record()
+	_test_falling_short_of_the_best_stage_keeps_it()
 	await _test_the_pause_button_freezes_and_resumes()
 	await _test_resuming_does_not_launch_the_ball()
 	await _test_screen_point_maps_to_board()
@@ -108,6 +110,37 @@ func _test_last_life_shows_game_over() -> void:
 	var before: Vector2 = g.field.ball_pos
 	g._physics_process(1.0 / 120.0)
 	assert(g.field.ball_pos == before, "게임오버인데 공이 움직였다")
+	g.free()
+
+# 최고 기록을 처음 세우거나 갱신하면 저장되고 화면이 "신기록!" 으로 바뀐다.
+func _test_beating_the_best_stage_saves_a_new_record() -> void:
+	SaveData.save_best_stage(2)
+	var packed := load("res://scenes/game.tscn") as PackedScene
+	var g := packed.instantiate()
+	root.add_child(g)
+	g._ready()
+	assert(g._best_stage == 2, "저장된 최고 기록을 안 불러왔다: %d" % g._best_stage)
+	g._state = g.State.PLAYING
+	g.field.stage_index = 2
+	g._game_over()
+	assert(g.game_over_best_label.text == "신기록!",
+		"판 3 으로 최고(판 2)를 넘겼는데 신기록 표시가 안 떴다: %s" % g.game_over_best_label.text)
+	assert(SaveData.load_best_stage() == 3, "새 기록이 저장 안 됐다")
+	g.free()
+
+# 최고 기록에 못 미치면 저장값은 그대로고, 화면은 기존 기록을 보여준다.
+func _test_falling_short_of_the_best_stage_keeps_it() -> void:
+	SaveData.save_best_stage(5)
+	var packed := load("res://scenes/game.tscn") as PackedScene
+	var g := packed.instantiate()
+	root.add_child(g)
+	g._ready()
+	g._state = g.State.PLAYING
+	g.field.stage_index = 1
+	g._game_over()
+	assert(g.game_over_best_label.text == "최고 기록: 판 5",
+		"판 2 로 최고(판 5)를 못 넘겼는데 표시가 틀렸다: %s" % g.game_over_best_label.text)
+	assert(SaveData.load_best_stage() == 5, "못 넘겼는데 저장값이 바뀌었다")
 	g.free()
 
 # 게임오버 화면은 터치를 기다렸다가 처음부터 다시 시작한다.

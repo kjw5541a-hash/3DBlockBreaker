@@ -6,6 +6,8 @@ extends Node3D
 @onready var version_label: Label = $HUD/Version
 @onready var stage_label: Label = $HUD/Stage
 @onready var title_screen: Control = $HUD/TitleScreen
+@onready var title_best_label: Label = $HUD/TitleScreen/BestStage
+@onready var game_over_best_label: Label = $HUD/GameOverScreen/BestStage
 @onready var fire_flash: ColorRect = $HUD/FireFlash
 @onready var pause_button: Label = $HUD/PauseButton
 @onready var pause_screen: ColorRect = $HUD/PauseScreen
@@ -33,7 +35,14 @@ var _state: State = State.TITLE
 # 자체를 안드로이드에서만 만든다.
 var admob: Admob = null
 
+# 기기에 남은 역대 최고 도달 판. 0 이면 아직 기록이 없다는 뜻이라 타이틀에
+# 안 띄운다 — 처음 켠 사람에게 "0 판"은 목표가 아니라 잡음이다.
+var _best_stage: int = 0
+
 func _ready() -> void:
+	_best_stage = SaveData.load_best_stage()
+	title_best_label.visible = _best_stage > 0
+	title_best_label.text = "최고 기록: 판 %d" % _best_stage
 	if OS.get_name() == "Android":
 		admob = Admob.new()
 		admob.is_real = true
@@ -185,7 +194,14 @@ func _toggle_pause() -> void:
 # 것인지 화면이 튄 것인지 구별할 수 없다. 멈춰 세우고 어디까지 갔는지 보여준다.
 func _game_over() -> void:
 	_state = State.OVER
-	game_over_stage.text = "판 %d 까지" % (field.stage_index + 1)
+	var reached := field.stage_index + 1
+	game_over_stage.text = "판 %d 까지" % reached
+	if reached > _best_stage:
+		_best_stage = reached
+		SaveData.save_best_stage(_best_stage)
+		game_over_best_label.text = "신기록!"
+	else:
+		game_over_best_label.text = "최고 기록: 판 %d" % _best_stage
 	game_over_screen.visible = true
 	# 광고는 한 번 보여주면 소모된다(remove_rewarded_ads_after_displayed) — 게임오버
 	# 화면이 뜰 때마다 다음 걸 새로 불러온다. 버튼은 로드가 끝나야(rewarded_ad_loaded)
