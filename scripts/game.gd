@@ -30,14 +30,15 @@ var _state: State = State.TITLE
 
 # Admob 싱글턴은 실제 안드로이드 기기에서만 존재한다. 데스크톱/웹/헤드리스
 # 테스트에서 노드를 만들면 _ready() 안에서 바로 에러를 낸다 — 그래서 이 노드
-# 자체를 안드로이드에서만 만든다. 실제 광고단위 ID 가 나오면 is_real 을 true 로
-# 바꾸고 android_real_rewarded_id 를 채울 것 — 지금은 구글 공식 테스트 ID(기본값)를 쓴다.
+# 자체를 안드로이드에서만 만든다.
 var admob: Admob = null
 
 func _ready() -> void:
 	if OS.get_name() == "Android":
 		admob = Admob.new()
-		admob.is_real = false
+		admob.is_real = true
+		admob.android_real_application_id = "ca-app-pub-6471092831122102~3630800345"
+		admob.android_real_rewarded_id = "ca-app-pub-6471092831122102/8691555332"
 		add_child(admob)
 		admob.initialization_completed.connect(func(_status): admob.load_rewarded_ad())
 		admob.rewarded_ad_loaded.connect(func(_ad_info, _resp): continue_button.visible = true)
