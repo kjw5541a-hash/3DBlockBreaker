@@ -11,6 +11,7 @@ extends Node3D
 @onready var pause_screen: ColorRect = $HUD/PauseScreen
 @onready var game_over_screen: ColorRect = $HUD/GameOverScreen
 @onready var game_over_stage: Label = $HUD/GameOverScreen/Stage
+@onready var continue_button: Label = $HUD/GameOverScreen/ContinueButton
 @onready var _sfx_paddle_hit: AudioStreamPlayer = $Sfx/PaddleHit
 @onready var _sfx_wall_hit: AudioStreamPlayer = $Sfx/WallHit
 @onready var _sfx_brick_break: AudioStreamPlayer = $Sfx/BrickBreak
@@ -27,7 +28,22 @@ var _trail: BallTrail
 enum State { TITLE, PLAYING, PAUSED, OVER }
 var _state: State = State.TITLE
 
+# Admob 싱글턴은 실제 안드로이드 기기에서만 존재한다. 데스크톱/웹/헤드리스
+# 테스트에서 노드를 만들면 _ready() 안에서 바로 에러를 낸다 — 그래서 이 노드
+# 자체를 안드로이드에서만 만든다.
+var admob: Admob = null
+
 func _ready() -> void:
+	if OS.get_name() == "Android":
+		admob = Admob.new()
+		admob.is_real = true
+		admob.android_real_application_id = "ca-app-pub-6471092831122102~3630800345"
+		admob.android_real_rewarded_id = "ca-app-pub-6471092831122102/8691555332"
+		add_child(admob)
+		admob.initialization_completed.connect(func(_status): admob.load_rewarded_ad())
+		admob.rewarded_ad_loaded.connect(func(_ad_info, _resp): continue_button.visible = true)
+		admob.rewarded_ad_user_earned_reward.connect(_on_rewarded_earned)
+		admob.initialize()
 	field = PlayField.new()
 	_target = field.paddle.pos
 	board.build(field.grid)
@@ -131,7 +147,10 @@ func _unhandled_input(event: InputEvent) -> void:
 				_start()
 		State.OVER:
 			if touch != null and touch.pressed:
-				_restart()
+				if continue_button.visible and continue_button.get_global_rect().has_point(touch.position):
+					admob.show_rewarded_ad()
+				else:
+					_restart()
 		State.PLAYING:
 			_play_input(event)
 
@@ -168,8 +187,28 @@ func _game_over() -> void:
 	_state = State.OVER
 	game_over_stage.text = "판 %d 까지" % (field.stage_index + 1)
 	game_over_screen.visible = true
+	# 광고는 한 번 보여주면 소모된다(remove_rewarded_ads_after_displayed) — 게임오버
+	# 화면이 뜰 때마다 다음 걸 새로 불러온다. 버튼은 로드가 끝나야(rewarded_ad_loaded)
+	# 다시 보인다.
+	if admob != null:
+		continue_button.visible = false
+		admob.load_rewarded_ad()
+
+# 이어하기 광고를 다 보면 판을 그대로 두고 목숨만 하나 준다 — 처음부터 다시
+# 시작하는 것과 달리 여기까지 깬 블럭은 안 살아난다.
+func _on_rewarded_earned(_ad_info, _reward_data) -> void:
+	if _state != State.OVER:
+		return
+	continue_button.visible = false
+	game_over_screen.visible = false
+	field.lives = 1
+	_trail.reset()
+	_target = field.paddle.pos
+	_update_hud()
+	_state = State.PLAYING
 
 func _restart() -> void:
+	continue_button.visible = false
 	game_over_screen.visible = false
 	field.reset_run()
 	board.build(field.grid)
